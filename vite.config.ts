@@ -4,7 +4,7 @@ import vuetify from 'vite-plugin-vuetify'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/GravitySimulator/',
+  base: '/',
   plugins: [
     vue(),
     vuetify({ autoImport: true }),
