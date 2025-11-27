@@ -4,6 +4,14 @@
     <div class="overlay-ui">
       <!-- We'll add UI controls here later or in a separate component -->
     </div>
+    <!-- Slingshot tooltip -->
+    <div 
+      v-if="isSlingshotting && slingshotStartPos"
+      class="slingshot-tooltip"
+      :style="{ left: currentMouseScreenPos.x + 20 + 'px', top: currentMouseScreenPos.y - 10 + 'px' }"
+    >
+      Hold down <span class="key">Shift</span> for Multiple
+    </div>
   </div>
 </template>
 
@@ -364,7 +372,7 @@ const render = (timestamp: number) => {
   );
   
   const rightMargin = canvas.value.width - 10;
-  const topMargin = 50;
+  const topMargin = 60;
   
   // Background for readability
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -392,6 +400,9 @@ const render = (timestamp: number) => {
 // Input Event Handlers
 const ghostPath = ref<Vector2[]>([]);
 const onMouseDown = (e: MouseEvent) => {
+  // Block interaction during tour
+  if (simulationStore.showIntroTour) return;
+  
   if (e.button === 1) { // Middle click to pan
     isDragging = true;
     lastMousePos = new Vector2(e.clientX, e.clientY);
@@ -457,14 +468,14 @@ const onMouseDown = (e: MouseEvent) => {
         slingshotLockedBodyId = null;
       }
       
-      isSlingshotting = true;
+      isSlingshotting.value = true;
     }
   }
 };
 
 let slingshotStartPos: Vector2 | null = null;
 let slingshotLockedBodyId: string | null = null; // Track if slingshot was started while locked to a body
-let isSlingshotting = false;
+const isSlingshotting = ref(false);
 let isShiftPressed = false;
 let lastShiftSpawnTime = 0;
 const SHIFT_SPAWN_INTERVAL = 100; // 10 bodies per second (1000ms / 10 = 100ms)
@@ -477,6 +488,9 @@ let globalMaxVel = 0;
 const onMouseMove = (e: MouseEvent) => {
   const currentMousePos = new Vector2(e.clientX, e.clientY);
   currentMouseScreenPos = currentMousePos;
+  
+  // Block interaction during tour
+  if (simulationStore.showIntroTour) return;
   
   if (isDragging) {
     const delta = lastMousePos.sub(currentMousePos).div(cameraStore.zoom);
@@ -503,7 +517,7 @@ const onMouseMove = (e: MouseEvent) => {
     }
   }
 
-  if (isSlingshotting && slingshotStartPos) {
+  if (isSlingshotting.value && slingshotStartPos) {
     // Get the actual world position for the slingshot start
     let actualStartPos = slingshotStartPos;
     if (slingshotLockedBodyId) {
@@ -528,10 +542,13 @@ const onMouseMove = (e: MouseEvent) => {
 };
 
 const onMouseUp = (e: MouseEvent) => {
+  // Block interaction during tour
+  if (simulationStore.showIntroTour) return;
+  
   isDragging = false;
   isRightDragging = false;
   
-  if (isSlingshotting && slingshotStartPos) {
+  if (isSlingshotting.value && slingshotStartPos) {
     // Get the actual world position for the slingshot start
     let actualStartPos = slingshotStartPos;
     if (slingshotLockedBodyId) {
@@ -545,6 +562,23 @@ const onMouseUp = (e: MouseEvent) => {
     const pullVector = actualStartPos.sub(endPos);
     const velocity = pullVector.mult(SLINGSHOT_VELOCITY);
 
+    // Debug logging for manual launch
+    console.log('=== Manual Launch Debug Info ===');
+    console.log('Body Position:', { x: actualStartPos.x, y: actualStartPos.y });
+    console.log('Velocity:', { x: velocity.x, y: velocity.y });
+    console.log('Velocity Magnitude:', velocity.mag());
+    console.log('Body Mass:', simulationStore.creationSettings.mass);
+    console.log('Body Radius:', simulationStore.creationSettings.radius);
+    
+    // Check distance from any static bodies (suns)
+    const staticBodies = simulationStore.bodies.filter(b => b.isStatic);
+    staticBodies.forEach(sun => {
+      const distance = actualStartPos.dist(sun.position);
+      console.log(`Distance from Sun at (${sun.position.x}, ${sun.position.y}):`, distance);
+      console.log('Sun Mass:', sun.mass);
+      console.log('Expected circular orbit speed at this distance:', Math.sqrt(1000000.0 * sun.mass / distance));
+    });
+
     simulationStore.addBody({
       id: crypto.randomUUID(),
       position: actualStartPos,
@@ -557,7 +591,7 @@ const onMouseUp = (e: MouseEvent) => {
     // Reset isStatic to false after placing a body
     simulationStore.creationSettings.isStatic = false;
 
-    isSlingshotting = false;
+    isSlingshotting.value = false;
     slingshotStartPos = null;
     slingshotLockedBodyId = null;
     ghostPath.value = [];
@@ -566,6 +600,9 @@ const onMouseUp = (e: MouseEvent) => {
 
 const onWheel = (e: WheelEvent) => {
   e.preventDefault();
+  
+  // Block interaction during tour
+  if (simulationStore.showIntroTour) return;
   
   if (!canvas.value) return;
   
@@ -630,6 +667,9 @@ const getTouchCenter = (touch1: Touch, touch2: Touch): Vector2 => {
 const onTouchStart = (e: TouchEvent) => {
   e.preventDefault(); // Prevent default touch behavior
   
+  // Block interaction during tour
+  if (simulationStore.showIntroTour) return;
+  
   if (e.touches.length === 1) {
     // Single touch - same as left click (slingshot)
     const touch = e.touches[0];
@@ -653,8 +693,8 @@ const onTouchStart = (e: TouchEvent) => {
       isDragging = true;
       
       // Cancel any ongoing slingshot
-      if (isSlingshotting) {
-        isSlingshotting = false;
+      if (isSlingshotting.value) {
+        isSlingshotting.value = false;
         slingshotStartPos = null;
         slingshotLockedBodyId = null;
         ghostPath.value = [];
@@ -665,6 +705,9 @@ const onTouchStart = (e: TouchEvent) => {
 
 const onTouchMove = (e: TouchEvent) => {
   e.preventDefault();
+  
+  // Block interaction during tour
+  if (simulationStore.showIntroTour) return;
   
   if (e.touches.length === 1 && isSlingshotting) {
     // Single touch move - slingshot drag
@@ -716,6 +759,9 @@ const onTouchMove = (e: TouchEvent) => {
 
 const onTouchEnd = (e: TouchEvent) => {
   e.preventDefault();
+  
+  // Block interaction during tour
+  if (simulationStore.showIntroTour) return;
   
   if (e.touches.length === 0) {
     // All touches released
@@ -800,5 +846,29 @@ onUnmounted(() => {
 canvas {
   display: block;
   touch-action: none; /* Prevent default touch actions like scrolling */
+}
+
+.slingshot-tooltip {
+  position: absolute;
+  background: rgba(30, 30, 30, 0.95);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.slingshot-tooltip .key {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-weight: bold;
+  color: #82B1FF;
 }
 </style>

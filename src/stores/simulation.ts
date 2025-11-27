@@ -27,6 +27,7 @@ export const useSimulationStore = defineStore('simulation', () => {
 
     const showTrails = ref(true); // Toggle for showing trails
     const allowSameTypeInteraction = ref(false); // If false, same body types don't interact
+    const showIntroTour = ref(true); // Control intro tour visibility
 
     // Actions
     function addBody(body: Body) {
@@ -75,6 +76,10 @@ export const useSimulationStore = defineStore('simulation', () => {
         return physicsEngine.predictTrajectory(bodies.value, tempBody, steps, dt * timeScale.value);
     }
 
+    function completeTour() {
+        showIntroTour.value = false;
+    }
+
     return {
         bodies,
         isPaused,
@@ -83,11 +88,13 @@ export const useSimulationStore = defineStore('simulation', () => {
         massPresets,
         showTrails,
         allowSameTypeInteraction,
+        showIntroTour,
         addBody,
         update,
         reset,
         removeBody,
         predictPath,
-        toggleTrails
+        toggleTrails,
+        completeTour
     };
 });

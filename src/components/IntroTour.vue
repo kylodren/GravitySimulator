@@ -1,0 +1,493 @@
+<template>
+  <div v-if="isActive" class="tour-overlay">
+    <!-- Blocking layer to prevent interaction -->
+    <div class="interaction-blocker"></div>
+    
+    <!-- Demo Slingshot Visualization -->
+    <svg v-if="demoSlingshotStart && demoSlingshotEnd" class="demo-overlay">
+      <!-- Ghost path (predicted trajectory) - solid bright red line -->
+      <polyline
+        v-if="demoGhostPath.length > 0"
+        :points="demoGhostPathPoints"
+        fill="none"
+        stroke="rgba(255, 50, 50, 1)"
+        stroke-width="3"
+      />
+      
+      <!-- Slingshot line -->
+      <line
+        :x1="worldToScreenX(demoSlingshotStart.x)"
+        :y1="worldToScreenY(demoSlingshotStart.y)"
+        :x2="worldToScreenX(demoSlingshotEnd.x)"
+        :y2="worldToScreenY(demoSlingshotEnd.y)"
+        stroke="rgba(255, 100, 100, 0.8)"
+        stroke-width="3"
+      />
+      
+      <!-- Start point circle -->
+      <circle
+        :cx="worldToScreenX(demoSlingshotStart.x)"
+        :cy="worldToScreenY(demoSlingshotStart.y)"
+        r="8"
+        fill="rgba(255, 100, 100, 0.6)"
+        stroke="rgba(255, 100, 100, 1)"
+        stroke-width="2"
+      />
+    </svg>
+    
+    <!-- Callout Box -->
+    <div 
+      class="tour-callout"
+      :style="calloutPosition"
+    >
+      <div class="callout-content">
+        <p class="callout-text">{{ currentStepMessage }}</p>
+        <v-btn 
+          @click="nextStep" 
+          color="primary" 
+          variant="elevated"
+          size="small"
+        >
+          {{ isLastStep ? 'Finish Tour' : 'Next' }}
+        </v-btn>
+      </div>
+      <!-- Arrow pointer -->
+      <div class="callout-arrow" :class="arrowPosition"></div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { useSimulationStore } from '../stores/simulation';
+import { useCameraStore } from '../stores/camera';
+import { Vector2 } from '../core/Vector2';
+
+const simulationStore = useSimulationStore();
+const cameraStore = useCameraStore();
+const currentStep = ref(0);
+const isActive = ref(true);
+
+const steps = [
+  {
+    message: 'First, place bodies',
+    targetSelector: '[data-body-type="sun"]',
+    arrowDir: 'top'
+  },
+  {
+    message: 'Sun Placed (fixed option)',
+    targetSelector: '.canvas-container',
+    arrowDir: 'top',
+    centerScreen: true
+  },
+  {
+    message: 'Select Asteroid',
+    targetSelector: '[data-body-type="asteroid"]',
+    arrowDir: 'top'
+  },
+  {
+    message: 'Click and drag at a tangent to launch (hold shift for multiple)',
+    targetSelector: '.canvas-container',
+    arrowDir: 'left',
+    rightSide: true,
+    rightOffset: 'calc(25% - 50px)'
+  },
+  {
+    message: 'Click-Drag your own! Have fun exploring orbits!',
+    targetSelector: '.canvas-container',
+    arrowDir: 'left',
+    rightSide: true,
+    rightOffset: '50px'
+  }
+];
+
+const currentStepMessage = computed(() => steps[currentStep.value]?.message || '');
+const isLastStep = computed(() => currentStep.value === steps.length - 1);
+const arrowPosition = computed(() => steps[currentStep.value]?.arrowDir || 'top');
+
+// Helper functions for coordinate conversion
+const worldToScreenX = (worldX: number): number => {
+  const canvas = document.querySelector('.canvas-container canvas') as HTMLCanvasElement;
+  if (!canvas) return 0;
+  return (worldX - cameraStore.offset.x) * cameraStore.zoom + canvas.width / 2;
+};
+
+const worldToScreenY = (worldY: number): number => {
+  const canvas = document.querySelector('.canvas-container canvas') as HTMLCanvasElement;
+  if (!canvas) return 0;
+  return (worldY - cameraStore.offset.y) * cameraStore.zoom + canvas.height / 2;
+};
+
+// Computed property for ghost path points
+const demoGhostPathPoints = computed(() => {
+  return demoGhostPath.value.map(p => `${worldToScreenX(p.x)},${worldToScreenY(p.y)}`).join(' ');
+});
+
+const calloutPosition = ref<Record<string, string>>({
+  top: '50%',
+  left: '50%',
+  transform: 'translate(-50%, -50%)'
+});
+
+const updateCalloutPosition = () => {
+  const step = steps[currentStep.value];
+  if (!step) return;
+
+  if (step.centerScreen) {
+    // Position below the sun in center of screen
+    calloutPosition.value = {
+      top: '55%',
+      left: '50%',
+      right: 'auto',
+      transform: 'translateX(-50%)'
+    };
+  } else if (step.rightSide) {
+    // Position on right side of screen
+    const rightValue = step.rightOffset || '25%';
+    calloutPosition.value = {
+      top: '50%',
+      right: rightValue,
+      left: 'auto',
+      transform: 'translateY(-50%)'
+    };
+  } else {
+    // Position relative to target element
+    const target = document.querySelector(step.targetSelector);
+    if (target) {
+      const rect = target.getBoundingClientRect();
+      calloutPosition.value = {
+        top: `${rect.bottom + 20}px`,
+        left: `${rect.left + rect.width / 2}px`,
+        right: 'auto',
+        transform: 'translateX(-50%)'
+      };
+    }
+  }
+};
+
+const calculateCircularOrbitVelocity = (sunPos: Vector2, asteroidPos: Vector2, sunMass: number): Vector2 => {
+  // For circular orbit: v = sqrt(G * M / r)
+  // G is our gravitational constant from PhysicsEngine
+  const G = 1000000.0; // Match the G in PhysicsEngine
+  const r = asteroidPos.dist(sunPos);
+  
+  // Calculate orbital speed
+  const speed = Math.sqrt(G * sunMass / r);
+  
+  // Get direction perpendicular to radius (tangent for circular orbit)
+  const toAsteroid = asteroidPos.sub(sunPos).normalize();
+  // Rotate 90 degrees counter-clockwise for prograde orbit
+  const tangent = new Vector2(-toAsteroid.y, toAsteroid.x);
+  
+  return tangent.mult(speed);
+};
+
+// Animated slingshot demonstration
+const demoSlingshotStart = ref<Vector2 | null>(null);
+const demoSlingshotEnd = ref<Vector2 | null>(null);
+const demoGhostPath = ref<Vector2[]>([]);
+
+const animateSlingshotGesture = async (startPos: Vector2, finalVelocity: Vector2): Promise<void> => {
+  const SLINGSHOT_VELOCITY = 2.0;
+  
+  // Calculate the actual drag length needed for the final velocity
+  const velocityMagnitude = finalVelocity.mag();
+  const dragLength = velocityMagnitude / SLINGSHOT_VELOCITY;
+  
+  // Make the visual drag go directly to the right (0 degrees)
+  const dragEndPos = new Vector2(startPos.x + dragLength, startPos.y);
+  
+  // Animate the drag motion over 1.5 seconds
+  const duration = 1500; // ms
+  const steps = 30; // smooth animation
+  const stepTime = duration / steps;
+  
+  demoSlingshotStart.value = startPos;
+  
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps; // 0 to 1
+    
+    // Interpolate from start to drag end position (horizontally to the right)
+    const currentEnd = new Vector2(
+      startPos.x + (dragEndPos.x - startPos.x) * t,
+      startPos.y + (dragEndPos.y - startPos.y) * t
+    );
+    
+    demoSlingshotEnd.value = currentEnd;
+    
+    // For the preview, use a scaled version of the actual final velocity
+    // so it shows the correct orbital path, not the path from the visual drag direction
+    const velocity = finalVelocity.mult(t);
+    
+    // Predict the trajectory with high resolution for smooth curve
+    const fullPath = simulationStore.predictPath(
+      startPos,
+      velocity,
+      simulationStore.creationSettings.mass,
+      1000,  // More steps
+      0.05   // Smaller time step for smoother curve
+    );
+    
+    // Show only first 200 points for a short, smooth preview arc
+    demoGhostPath.value = fullPath.slice(0, 200);
+    
+    await new Promise(resolve => setTimeout(resolve, stepTime));
+  }
+  
+  // Hold the final position for a moment
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Clear the demo visualization
+  demoSlingshotStart.value = null;
+  demoSlingshotEnd.value = null;
+  demoGhostPath.value = [];
+};
+
+const nextStep = async () => {
+  const step = currentStep.value;
+  
+  // Execute step actions before moving to next
+  switch (step) {
+    case 0:
+      // Step 1 -> 2: Place sun at center
+      currentStep.value++;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Place sun in center (fixed)
+      simulationStore.creationSettings.isStatic = true;
+      const preset = simulationStore.massPresets.sun;
+      simulationStore.addBody({
+        id: crypto.randomUUID(),
+        position: new Vector2(0, 0),
+        velocity: new Vector2(0, 0),
+        mass: preset.mass,
+        radius: preset.radius,
+        color: preset.color,
+        isStatic: true
+      });
+      updateCalloutPosition();
+      break;
+      
+    case 1:
+      // Step 2 -> 3: Select asteroid
+      currentStep.value++;
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Programmatically select asteroid and trigger UI update
+      const asteroidPreset = simulationStore.massPresets.asteroid;
+      simulationStore.creationSettings.mass = asteroidPreset.mass;
+      simulationStore.creationSettings.radius = asteroidPreset.radius;
+      simulationStore.creationSettings.color = asteroidPreset.color;
+      simulationStore.creationSettings.isStatic = false;
+      
+      // Trigger click on asteroid icon to update UI selection
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const asteroidIcon = document.querySelector('[data-body-type="asteroid"]');
+      if (asteroidIcon instanceof HTMLElement) {
+        asteroidIcon.click();
+      }
+      
+      updateCalloutPosition();
+      break;
+      
+    case 2:
+      // Step 3 -> 4: Show launch instruction
+      currentStep.value++;
+      updateCalloutPosition();
+      break;
+      
+    case 3:
+      // Step 4: Perform automated demo with animated slingshot
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Place asteroid at a nice distance from sun
+      const sunBody = simulationStore.bodies.find(b => b.isStatic);
+      if (sunBody) {
+        const sunPos = sunBody.position;
+        const distance = 200; // Nice orbital distance
+        const angle = Math.PI / 4; // 45 degrees
+        
+        const asteroidPos = new Vector2(
+          sunPos.x + Math.cos(angle) * distance,
+          sunPos.y + Math.sin(angle) * distance
+        );
+        
+        // Calculate perfect circular orbit velocity
+        const velocity = calculateCircularOrbitVelocity(
+          sunPos,
+          asteroidPos,
+          sunBody.mass
+        );
+        
+        // Animate the slingshot gesture before launch
+        await animateSlingshotGesture(asteroidPos, velocity);
+        
+        // Debug logging
+        console.log('=== Orbital Launch Debug Info ===');
+        console.log('Sun Position:', { x: sunPos.x, y: sunPos.y });
+        console.log('Sun Mass:', sunBody.mass);
+        console.log('Asteroid Position:', { x: asteroidPos.x, y: asteroidPos.y });
+        console.log('Distance from Sun:', distance);
+        console.log('Calculated Velocity:', { x: velocity.x, y: velocity.y });
+        console.log('Velocity Magnitude:', velocity.mag());
+        console.log('Asteroid Mass:', simulationStore.creationSettings.mass);
+        console.log('G (gravitational constant):', 1000000.0);
+        console.log('Expected orbital speed sqrt(G*M/r):', Math.sqrt(1000000.0 * sunBody.mass / distance));
+        
+        // Place the asteroid
+        simulationStore.addBody({
+          id: crypto.randomUUID(),
+          position: asteroidPos,
+          velocity: velocity,
+          mass: simulationStore.creationSettings.mass,
+          radius: simulationStore.creationSettings.radius,
+          color: simulationStore.creationSettings.color
+        });
+        
+        // Enable trails to show the orbit
+        if (!simulationStore.showTrails) {
+          simulationStore.toggleTrails();
+        }
+      }
+      
+      // Move to final step
+      currentStep.value++;
+      updateCalloutPosition();
+      break;
+      
+    case 4:
+      // Step 5: Finish tour
+      isActive.value = false;
+      emit('tour-complete');
+      break;
+  }
+};
+
+const emit = defineEmits(['tour-complete']);
+
+onMounted(() => {
+  updateCalloutPosition();
+  window.addEventListener('resize', updateCalloutPosition);
+});
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateCalloutPosition);
+});
+</script>
+
+<style scoped>
+.tour-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.interaction-blocker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  cursor: not-allowed;
+}
+
+.tour-callout {
+  position: absolute;
+  pointer-events: auto;
+  background: rgba(30, 30, 30, 0.95);
+  border: 2px solid;
+  border-image: linear-gradient(45deg, #2196F3, #82B1FF) 1;
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 280px;
+  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(33, 150, 243, 0.3);
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+.callout-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: center;
+}
+
+.callout-text {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #FFFFFF;
+  text-align: center;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.callout-arrow {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.callout-arrow.top {
+  top: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 0 12px 12px 12px;
+  border-color: transparent transparent #2196F3 transparent;
+}
+
+.callout-arrow.bottom {
+  bottom: -12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 12px 12px 0 12px;
+  border-color: #2196F3 transparent transparent transparent;
+}
+
+.callout-arrow.left {
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-width: 12px 12px 12px 0;
+  border-color: transparent #2196F3 transparent transparent;
+}
+
+.demo-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .tour-callout {
+    min-width: 240px;
+    max-width: 90vw;
+    padding: 16px;
+  }
+  
+  .callout-text {
+    font-size: 1rem;
+  }
+}
+</style>

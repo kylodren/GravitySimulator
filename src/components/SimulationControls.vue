@@ -96,6 +96,7 @@
               class="mass-option-compact"
               :class="{ 'mass-option-active': selectedMassType === 'asteroid' }"
               @click="selectMassType('asteroid')"
+              data-body-type="asteroid"
             >
               <AsteroidIcon :size="32" />
             </div>
@@ -103,6 +104,7 @@
               class="mass-option-compact"
               :class="{ 'mass-option-active': selectedMassType === 'planet' }"
               @click="selectMassType('planet')"
+              data-body-type="planet"
             >
               <PlanetIcon :size="32" />
             </div>
@@ -110,6 +112,7 @@
               class="mass-option-compact"
               :class="{ 'mass-option-active': selectedMassType === 'sun' }"
               @click="selectMassType('sun')"
+              data-body-type="sun"
             >
               <SunIcon :size="32" />
             </div>
@@ -117,6 +120,7 @@
               class="mass-option-compact"
               :class="{ 'mass-option-active': selectedMassType === 'blackhole' }"
               @click="selectMassType('blackhole')"
+              data-body-type="blackhole"
             >
               <BlackHoleIcon :size="32" />
             </div>

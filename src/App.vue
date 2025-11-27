@@ -3,6 +3,10 @@
     <v-main style="padding: 0; height: 100vh;">
       <GameCanvas />
       <SimulationControls />
+      <IntroTour 
+        v-if="simulationStore.showIntroTour" 
+        @tour-complete="simulationStore.completeTour()"
+      />
     </v-main>
   </v-app>
 </template>
@@ -10,6 +14,10 @@
 <script setup lang="ts">
 import GameCanvas from './components/GameCanvas.vue';
 import SimulationControls from './components/SimulationControls.vue';
+import IntroTour from './components/IntroTour.vue';
+import { useSimulationStore } from './stores/simulation';
+
+const simulationStore = useSimulationStore();
 </script>
 
 <style>
