@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useSimulationStore } from '../stores/simulation';
 import { useCameraStore } from '../stores/camera';
 import { Vector2 } from '../core/Vector2';
@@ -25,7 +25,6 @@ let lastTime = 0;
 let fpsFrames = 0;
 let fpsLastTime = 0;
 let currentFPS = 60;
-let currentFrameTime = 0;
 
 // Slingshot configuration
 const SLINGSHOT_VELOCITY = 2.0; // Velocity multiplier for slingshot launches
@@ -88,8 +87,7 @@ const render = (timestamp: number) => {
   const dt = (timestamp - lastTime) / 1000; // Delta time in seconds
   lastTime = timestamp;
 
-  // Calculate FPS and frame time
-  currentFrameTime = dt * 1000; // Convert to milliseconds
+  // Calculate FPS
   fpsFrames++;
   if (timestamp - fpsLastTime >= 1000) { // Update every second
     currentFPS = Math.round((fpsFrames * 1000) / (timestamp - fpsLastTime));
