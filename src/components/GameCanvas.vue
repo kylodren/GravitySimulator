@@ -610,17 +610,152 @@ const onKeyUp = (e: KeyboardEvent) => {
   }
 };
 
+// Touch Event Handlers for Mobile Support
+let initialPinchDistance: number | null = null;
+let initialZoom: number = 1;
+
+const getTouchDistance = (touch1: Touch, touch2: Touch): number => {
+  const dx = touch2.clientX - touch1.clientX;
+  const dy = touch2.clientY - touch1.clientY;
+  return Math.sqrt(dx * dx + dy * dy);
+};
+
+const getTouchCenter = (touch1: Touch, touch2: Touch): Vector2 => {
+  return new Vector2(
+    (touch1.clientX + touch2.clientX) / 2,
+    (touch1.clientY + touch2.clientY) / 2
+  );
+};
+
+const onTouchStart = (e: TouchEvent) => {
+  e.preventDefault(); // Prevent default touch behavior
+  
+  if (e.touches.length === 1) {
+    // Single touch - same as left click (slingshot)
+    const touch = e.touches[0];
+    if (touch) {
+      const mouseEvent = new MouseEvent('mousedown', {
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        button: 0
+      });
+      onMouseDown(mouseEvent);
+    }
+  } else if (e.touches.length === 2) {
+    // Two finger - setup for pinch zoom and pan
+    const touch1 = e.touches[0];
+    const touch2 = e.touches[1];
+    if (touch1 && touch2) {
+      initialPinchDistance = getTouchDistance(touch1, touch2);
+      initialZoom = cameraStore.zoom;
+      const center = getTouchCenter(touch1, touch2);
+      lastMousePos = center;
+      isDragging = true;
+      
+      // Cancel any ongoing slingshot
+      if (isSlingshotting) {
+        isSlingshotting = false;
+        slingshotStartPos = null;
+        slingshotLockedBodyId = null;
+        ghostPath.value = [];
+      }
+    }
+  }
+};
+
+const onTouchMove = (e: TouchEvent) => {
+  e.preventDefault();
+  
+  if (e.touches.length === 1 && isSlingshotting) {
+    // Single touch move - slingshot drag
+    const touch = e.touches[0];
+    if (touch) {
+      const mouseEvent = new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      });
+      onMouseMove(mouseEvent);
+    }
+  } else if (e.touches.length === 2) {
+    // Two finger - pinch zoom and pan
+    const touch1 = e.touches[0];
+    const touch2 = e.touches[1];
+    
+    if (touch1 && touch2 && canvas.value) {
+      const currentDistance = getTouchDistance(touch1, touch2);
+      const center = getTouchCenter(touch1, touch2);
+      
+      // Handle pinch zoom
+      if (initialPinchDistance !== null) {
+        const zoomFactor = currentDistance / initialPinchDistance;
+        const newZoom = Math.max(0.01, Math.min(initialZoom * zoomFactor, 100.0));
+        
+        // Zoom towards the center of the pinch
+        const canvasCenter = new Vector2(canvas.value.width / 2, canvas.value.height / 2);
+        const mouseDelta = center.sub(canvasCenter);
+        const oldZoom = cameraStore.zoom;
+        const offsetAdjustment = mouseDelta.mult(1/oldZoom - 1/newZoom);
+        
+        cameraStore.setZoom(newZoom);
+        
+        // Adjust offset (only if not locked to a body)
+        if (!cameraStore.lockedBodyId) {
+          cameraStore.offset = cameraStore.offset.add(offsetAdjustment);
+        }
+      }
+      
+      // Handle pan
+      if (isDragging) {
+        const delta = lastMousePos.sub(center).div(cameraStore.zoom);
+        cameraStore.pan(delta);
+        lastMousePos = center;
+      }
+    }
+  }
+};
+
+const onTouchEnd = (e: TouchEvent) => {
+  e.preventDefault();
+  
+  if (e.touches.length === 0) {
+    // All touches released
+    if (isSlingshotting) {
+      const mouseEvent = new MouseEvent('mouseup', {
+        clientX: currentMouseScreenPos.x,
+        clientY: currentMouseScreenPos.y,
+        button: 0
+      });
+      onMouseUp(mouseEvent);
+    }
+    isDragging = false;
+    initialPinchDistance = null;
+  } else if (e.touches.length === 1) {
+    // One finger left - reset pinch
+    initialPinchDistance = null;
+    isDragging = false;
+  }
+};
+
 onMounted(() => {
   window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
   
   if (canvas.value) {
+    // Mouse events
     canvas.value.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     canvas.value.addEventListener('wheel', onWheel);
+    
+    // Touch events for mobile
+    canvas.value.addEventListener('touchstart', onTouchStart, { passive: false });
+    canvas.value.addEventListener('touchmove', onTouchMove, { passive: false });
+    canvas.value.addEventListener('touchend', onTouchEnd, { passive: false });
+    
+    // Keyboard events
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
+    
     // Prevent context menu on right click
     canvas.value.addEventListener('contextmenu', e => e.preventDefault());
   }
@@ -632,10 +767,18 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('resize', resizeCanvas);
   if (canvas.value) {
+    // Remove mouse events
     canvas.value.removeEventListener('mousedown', onMouseDown);
     window.removeEventListener('mousemove', onMouseMove);
     window.removeEventListener('mouseup', onMouseUp);
     canvas.value.removeEventListener('wheel', onWheel);
+    
+    // Remove touch events
+    canvas.value.removeEventListener('touchstart', onTouchStart);
+    canvas.value.removeEventListener('touchmove', onTouchMove);
+    canvas.value.removeEventListener('touchend', onTouchEnd);
+    
+    // Remove keyboard events
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keyup', onKeyUp);
   }
@@ -656,5 +799,6 @@ onUnmounted(() => {
 
 canvas {
   display: block;
+  touch-action: none; /* Prevent default touch actions like scrolling */
 }
 </style>

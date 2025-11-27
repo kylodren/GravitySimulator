@@ -2,11 +2,14 @@
   <div>
     <!-- Compact Top Bar Controls -->
     <div class="top-bar-container" v-show="isVisible">
-      <v-card class="pa-0" elevation="4" color="surface">
-      <div class="d-flex align-center justify-space-between" style="width: 100%; max-width: 1600px; margin: 0 auto;">
+      <v-card class="pa-2" elevation="4" color="surface">
+      <div class="controls-wrapper">
         
-        <!-- Left: Simulation Controls -->
-        <div class="d-flex align-center" style="gap: 6px;">
+        <!-- Left: Title and Simulation Controls -->
+        <div class="controls-section controls-left">
+          <h1 class="app-title">Orbits</h1>
+          <v-divider vertical class="divider-desktop"></v-divider>
+          <div class="d-flex align-center flex-wrap" style="gap: 6px;">
           <v-tooltip location="bottom">
             <template v-slot:activator="{ props }">
               <v-btn
@@ -59,10 +62,11 @@
             </template>
             <span>Same-Type Interaction: {{ simulationStore.allowSameTypeInteraction ? 'On' : 'Off' }}</span>
           </v-tooltip>
+          </div>
         </div>
 
         <!-- Center: Speed Control -->
-        <div class="d-flex align-center" style="gap: 4px;">
+        <div class="controls-section controls-center">
           <v-tooltip location="bottom">
             <template v-slot:activator="{ props }">
               <span v-bind="props" class="speed-label">Speed:</span>
@@ -86,7 +90,7 @@
         </div>
 
         <!-- Right: Body Type Selection -->
-        <div class="d-flex align-center" style="gap: 8px;">
+        <div class="controls-section controls-right">
           <div class="d-flex" style="gap: 4px;">
             <div
               class="mass-option-compact"
@@ -117,7 +121,7 @@
               <BlackHoleIcon :size="32" />
             </div>
           </div>
-          <v-divider vertical style="height: 40px;"></v-divider>
+          <v-divider vertical class="divider-desktop"></v-divider>
           <div class="d-flex align-center" style="gap: 6px;">
             <span class="switch-label-compact">Fixed</span>
             <v-switch
@@ -237,7 +241,68 @@ selectMassType('sun');
   left: 0;
   z-index: 100;
   width: 100%;
-  max-height: 60px;
+}
+
+.controls-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 1600px;
+  margin: 0 auto;
+  gap: 12px;
+}
+
+.controls-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.controls-left {
+  gap: 12px;
+}
+
+.controls-center {
+  gap: 4px;
+}
+
+.controls-right {
+  gap: 8px;
+}
+
+/* Mobile responsive styles */
+@media (max-width: 768px) {
+  .controls-wrapper {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .controls-section {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .controls-left {
+    order: 1;
+  }
+  
+  .controls-right {
+    order: 2;
+  }
+  
+  .controls-center {
+    order: 3;
+  }
+  
+  .divider-desktop {
+    display: none;
+  }
+  
+  .app-title {
+    font-size: 1.2rem;
+  }
 }
 
 .speed-chip-active {
@@ -282,5 +347,19 @@ selectMassType('sun');
 
 .compact-switch {
   transform: scale(0.8);
+}
+
+.app-title {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: linear-gradient(45deg, #2196F3, #82B1FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+  padding: 0;
 }
 </style>
