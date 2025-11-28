@@ -86,7 +86,7 @@ const steps = [
     arrowDir: 'top'
   },
   {
-    message: 'Click and drag at a tangent to launch (hold shift or 2nd finger for multiple)',
+    message: 'Click and drag at a tangent to launch (hold shift for multiple)',
     targetSelector: '.canvas-container',
     arrowDir: 'left',
     rightSide: true,
