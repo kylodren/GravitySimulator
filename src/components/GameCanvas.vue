@@ -248,6 +248,32 @@ const render = (timestamp: number) => {
     }
   }
 
+  // Cull bodies that are extremely far from camera
+  let cameraCenter = cameraStore.offset;
+  if (cameraStore.lockedBodyId) {
+    const target = simulationStore.bodies.find(b => b.id === cameraStore.lockedBodyId);
+    if (target) {
+      cameraCenter = target.position;
+    }
+  }
+  
+  // Cull distance: FIXED world distance equal to viewport extent at 0.01 zoom
+  // This distance stays constant regardless of current zoom level
+  const viewportDiagonal = Math.sqrt(canvas.value.width ** 2 + canvas.value.height ** 2);
+  const CULL_DISTANCE = (viewportDiagonal / 0.1) * 0.6; // 60% past screen edge at 0.01x zoom
+  
+  for (let i = simulationStore.bodies.length - 1; i >= 0; i--) {
+    const body = simulationStore.bodies[i];
+    if (!body) continue;
+    if (body.isStatic) continue; // Never cull static bodies (suns/black holes)
+    if (body.id === cameraStore.lockedBodyId) continue; // Don't cull the locked body
+    
+    const distanceFromCamera = body.position.dist(cameraCenter);
+    if (distanceFromCamera > CULL_DISTANCE) {
+      simulationStore.bodies.splice(i, 1);
+    }
+  }
+
   // Clear Canvas
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, canvas.value.width, canvas.value.height);
@@ -260,6 +286,9 @@ const render = (timestamp: number) => {
     // Draw trails with per-segment colors based on stored relative speed
     for (const body of simulationStore.bodies) {
       if (body.trail && body.trail.length > 1) {
+        // Collect all velocities and sort them for percentile ranking
+        const velocities = body.trail.map(p => p.velocity).sort((a, b) => a - b);
+        
         // Draw more points for smoother trails (reduce sampling)
         const sampleRate = Math.max(1, Math.floor(body.trail.length / 500));
         
@@ -271,8 +300,9 @@ const render = (timestamp: number) => {
           
           if (!point || !nextPoint) continue;
           
-          // Use stored relative speed (0-1) for color
-          const relSpeed = point.relativeSpeed ?? 0.5; // Default to mid-range if not set
+          // Find percentile rank of this point's velocity (0-1)
+          const rank = velocities.findIndex(v => v >= point.velocity);
+          const relSpeed = rank / (velocities.length - 1);
           
           // Map to full color spectrum: 240 (blue/slow) -> 0 (red/fast)
           const hue = Math.round(240 - (relSpeed * 240));
