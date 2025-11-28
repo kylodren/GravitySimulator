@@ -3,6 +3,7 @@ import { Vector2 } from './Vector2';
 export interface TrailPoint {
     position: Vector2;
     velocity: number; // Magnitude of velocity at this point
+    relativeSpeed?: number; // Relative speed 0-1 for color-coded trail rendering
 }
 
 export interface Body {

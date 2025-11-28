@@ -145,9 +145,38 @@ const render = (timestamp: number) => {
         // Add trail point for visible bodies
         if (!body.trail) body.trail = [];
         const currentVel = body.velocity.mag();
+        
+        // Update system-wide velocity range over time (excluding static bodies)
+        const movingBodies = simulationStore.bodies.filter(b => !b.isStatic);
+        const allVelocities = movingBodies.map(b => b.velocity.mag());
+        const minVelNow = Math.min(...allVelocities);
+        const maxVelNow = Math.max(...allVelocities);
+        
+        // Smooth transitions: use exponential moving average (95% old, 5% new)
+        const smoothingFactor = 0.05;
+        if (systemMinVel === Infinity) {
+          systemMinVel = minVelNow;
+        } else if (minVelNow < systemMinVel) {
+          systemMinVel = minVelNow; // Instant when new low
+        } else {
+          systemMinVel = systemMinVel * (1 - smoothingFactor) + minVelNow * smoothingFactor;
+        }
+        
+        if (systemMaxVel === 0) {
+          systemMaxVel = maxVelNow;
+        } else if (maxVelNow > systemMaxVel) {
+          systemMaxVel = maxVelNow; // Instant when new high
+        } else {
+          systemMaxVel = systemMaxVel * (1 - smoothingFactor) + maxVelNow * smoothingFactor;
+        }
+        
+        // Calculate relative speed (0-1) based on system's smoothed velocity range
+        const relativeSpeed = systemMaxVel > systemMinVel ? (currentVel - systemMinVel) / (systemMaxVel - systemMinVel) : 0.5;
+        
         body.trail.push({
           position: body.position.clone(),
-          velocity: currentVel
+          velocity: currentVel,
+          relativeSpeed
         });
         
         // Update cached velocity range
@@ -228,27 +257,7 @@ const render = (timestamp: number) => {
 
   // Draw Trails
   if (simulationStore.showTrails) {
-    // Use cached velocity ranges from all bodies
-    let minVel = Infinity;
-    let maxVel = 0;
-    
-    for (const body of simulationStore.bodies) {
-      if (body.trail && body.trail.length > 0 && body.trailMinVel !== undefined && body.trailMaxVel !== undefined) {
-        minVel = Math.min(minVel, body.trailMinVel);
-        maxVel = Math.max(maxVel, body.trailMaxVel);
-      }
-    }
-    
-    // Use actual current range for immediate color response
-    if (minVel !== Infinity && maxVel > minVel) {
-      globalMinVel = minVel;
-      globalMaxVel = maxVel;
-    }
-    
-    // Use the actual range without padding, map velocities directly
-    const velocityRange = globalMaxVel - globalMinVel || 1;
-    
-    // Second pass: draw trails with per-segment colors based on stored velocities
+    // Draw trails with per-segment colors based on stored relative speed
     for (const body of simulationStore.bodies) {
       if (body.trail && body.trail.length > 1) {
         // Draw more points for smoother trails (reduce sampling)
@@ -262,12 +271,11 @@ const render = (timestamp: number) => {
           
           if (!point || !nextPoint) continue;
           
-          // Map velocity directly to 0-1 range
-          let velocityRatio = (point.velocity - globalMinVel) / velocityRange;
-          velocityRatio = Math.min(1, Math.max(0, velocityRatio)); // Clamp to 0-1
+          // Use stored relative speed (0-1) for color
+          const relSpeed = point.relativeSpeed ?? 0.5; // Default to mid-range if not set
           
-          // Map to full color spectrum: 240 (blue) -> 0 (red)
-          const hue = Math.round(240 - (velocityRatio * 240));
+          // Map to full color spectrum: 240 (blue/slow) -> 0 (red/fast)
+          const hue = Math.round(240 - (relSpeed * 240));
           const saturation = 100;
           
           ctx.beginPath();
@@ -454,11 +462,13 @@ const render = (timestamp: number) => {
   
   const fpsText = `FPS: ${currentFPS}`;
   const bodyCountText = `Bodies: ${simulationStore.bodies.length}`;
+  const zoomText = `Zoom: ${cameraStore.zoom.toFixed(2)}x`;
   
   // Measure text width for background
   const maxWidth = Math.max(
     ctx.measureText(fpsText).width,
-    ctx.measureText(bodyCountText).width
+    ctx.measureText(bodyCountText).width,
+    ctx.measureText(zoomText).width
   );
   
   const rightMargin = canvas.value.width - 10;
@@ -466,7 +476,7 @@ const render = (timestamp: number) => {
   
   // Background for readability
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 50);
+  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 70);
   
   // FPS text with color coding
   if (currentFPS >= 50) {
@@ -481,6 +491,10 @@ const render = (timestamp: number) => {
   // Body count
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(bodyCountText, rightMargin - 10, topMargin + 40);
+  
+  // Zoom level
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(zoomText, rightMargin - 10, topMargin + 60);
   
   ctx.restore();
 
@@ -535,6 +549,8 @@ const onMouseDown = (e: MouseEvent) => {
       }
       // Toggle lock: if clicking the currently locked body, unlock it
       else if (cameraStore.lockedBodyId === clickedBody.id) {
+        // Update camera offset to body's current position before unlocking
+        cameraStore.offset = clickedBody.position.clone();
         cameraStore.lockToBody(null);
       } else {
         cameraStore.lockToBody(clickedBody.id);
@@ -572,9 +588,9 @@ let lastShiftSpawnTime = 0;
 const SHIFT_SPAWN_INTERVAL = 100; // 10 bodies per second (1000ms / 10 = 100ms)
 let currentMouseScreenPos = new Vector2(0, 0);
 
-// Track velocity range over time for smooth color mapping
-let globalMinVel = Infinity;
-let globalMaxVel = 0;
+// Track system-wide velocity range over time for trail coloring
+let systemMinVel = Infinity;
+let systemMaxVel = 0;
 
 const onMouseMove = (e: MouseEvent) => {
   const currentMousePos = new Vector2(e.clientX, e.clientY);
@@ -654,23 +670,6 @@ const onMouseUp = (e: MouseEvent) => {
     const endPos = screenToWorld(new Vector2(e.clientX, e.clientY));
     const pullVector = actualStartPos.sub(endPos);
     const velocity = pullVector.mult(SLINGSHOT_VELOCITY.value);
-
-    // Debug logging for manual launch
-    console.log('=== Manual Launch Debug Info ===');
-    console.log('Body Position:', { x: actualStartPos.x, y: actualStartPos.y });
-    console.log('Velocity:', { x: velocity.x, y: velocity.y });
-    console.log('Velocity Magnitude:', velocity.mag());
-    console.log('Body Mass:', simulationStore.creationSettings.mass);
-    console.log('Body Radius:', simulationStore.creationSettings.radius);
-    
-    // Check distance from any static bodies (suns)
-    const staticBodies = simulationStore.bodies.filter(b => b.isStatic);
-    staticBodies.forEach(sun => {
-      const distance = actualStartPos.dist(sun.position);
-      console.log(`Distance from Sun at (${sun.position.x}, ${sun.position.y}):`, distance);
-      console.log('Sun Mass:', sun.mass);
-      console.log('Expected circular orbit speed at this distance:', Math.sqrt(1000000.0 * sun.mass / distance));
-    });
 
     simulationStore.addBody({
       id: crypto.randomUUID(),
