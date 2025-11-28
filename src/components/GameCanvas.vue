@@ -4,13 +4,19 @@
     <div class="overlay-ui">
       <!-- We'll add UI controls here later or in a separate component -->
     </div>
-    <!-- Slingshot tooltip -->
+    <!-- Multiple Bodies Button (appears during slingshot) -->
     <div 
       v-if="isSlingshotting && slingshotStartPos"
-      class="slingshot-tooltip"
-      :style="{ left: currentMouseScreenPos.x + 20 + 'px', top: currentMouseScreenPos.y - 10 + 'px' }"
+      class="multiple-button-container"
     >
-      Hold down <span class="key">Shift</span> for Multiple
+      <button 
+        class="multiple-button"
+        :class="{ active: isMultipleMode }"
+        @mousedown.stop="toggleMultipleMode"
+        @touchstart.stop="toggleMultipleMode"
+      >
+        Multiple
+      </button>
     </div>
   </div>
 </template>
@@ -158,8 +164,8 @@ const render = (timestamp: number) => {
     }
   }
 
-  // Handle Shift + Slingshot spawning
-  if (isSlingshotting && isShiftPressed && slingshotStartPos) {
+  // Handle Shift + Slingshot spawning or Multiple button
+  if (isSlingshotting.value && (isShiftPressed || isMultipleMode.value) && slingshotStartPos) {
     const now = performance.now();
     if (now - lastShiftSpawnTime >= SHIFT_SPAWN_INTERVAL) {
       let actualStartPos = slingshotStartPos;
@@ -476,6 +482,7 @@ const onMouseDown = (e: MouseEvent) => {
 let slingshotStartPos: Vector2 | null = null;
 let slingshotLockedBodyId: string | null = null; // Track if slingshot was started while locked to a body
 const isSlingshotting = ref(false);
+const isMultipleMode = ref(false); // Toggle for multiple body spawning
 let isShiftPressed = false;
 let lastShiftSpawnTime = 0;
 const SHIFT_SPAWN_INTERVAL = 100; // 10 bodies per second (1000ms / 10 = 100ms)
@@ -592,6 +599,7 @@ const onMouseUp = (e: MouseEvent) => {
     simulationStore.creationSettings.isStatic = false;
 
     isSlingshotting.value = false;
+    isMultipleMode.value = false;
     slingshotStartPos = null;
     slingshotLockedBodyId = null;
     ghostPath.value = [];
@@ -633,6 +641,11 @@ const onWheel = (e: WheelEvent) => {
   if (!cameraStore.lockedBodyId) {
     cameraStore.offset = cameraStore.offset.add(offsetAdjustment);
   }
+};
+
+const toggleMultipleMode = (e: Event) => {
+  e.preventDefault();
+  isMultipleMode.value = !isMultipleMode.value;
 };
 
 const onKeyDown = (e: KeyboardEvent) => {
@@ -765,7 +778,7 @@ const onTouchEnd = (e: TouchEvent) => {
   
   if (e.touches.length === 0) {
     // All touches released
-    if (isSlingshotting) {
+    if (isSlingshotting.value) {
       const mouseEvent = new MouseEvent('mouseup', {
         clientX: currentMouseScreenPos.x,
         clientY: currentMouseScreenPos.y,
@@ -775,6 +788,7 @@ const onTouchEnd = (e: TouchEvent) => {
     }
     isDragging = false;
     initialPinchDistance = null;
+    isMultipleMode.value = false;
   } else if (e.touches.length === 1) {
     // One finger left - reset pinch
     initialPinchDistance = null;
@@ -848,27 +862,39 @@ canvas {
   touch-action: none; /* Prevent default touch actions like scrolling */
 }
 
-.slingshot-tooltip {
+.multiple-button-container {
   position: absolute;
-  background: rgba(30, 30, 30, 0.95);
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  pointer-events: none;
+  top: 170px;
+  left: 10px;
   z-index: 1000;
-  white-space: nowrap;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  pointer-events: auto;
 }
 
-.slingshot-tooltip .key {
-  background: rgba(255, 255, 255, 0.15);
-  padding: 2px 6px;
-  border-radius: 3px;
-  font-family: monospace;
-  font-weight: bold;
-  color: #82B1FF;
+.multiple-button {
+  background: rgba(30, 30, 30, 0.95);
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.multiple-button:hover {
+  background: rgba(50, 50, 50, 0.95);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.05);
+}
+
+.multiple-button.active {
+  background: rgba(33, 150, 243, 0.9);
+  border-color: #2196F3;
+  color: #fff;
+  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.5);
 }
 </style>
