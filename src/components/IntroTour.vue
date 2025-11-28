@@ -276,7 +276,8 @@ const nextStep = async () => {
         mass: preset.mass,
         radius: preset.radius,
         color: preset.color,
-        isStatic: true
+        isStatic: true,
+        bodyType: 'sun'
       });
       updateCalloutPosition();
       break;
@@ -354,7 +355,8 @@ const nextStep = async () => {
           velocity: velocity,
           mass: simulationStore.creationSettings.mass,
           radius: simulationStore.creationSettings.radius,
-          color: simulationStore.creationSettings.color
+          color: simulationStore.creationSettings.color,
+          bodyType: 'asteroid'
         });
         
         // Enable trails to show the orbit

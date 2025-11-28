@@ -15,14 +15,16 @@ export const useSimulationStore = defineStore('simulation', () => {
         asteroid: { mass: 1, radius: 3, color: '#808080', name: 'Asteroid' },
         planet: { mass: 10, radius: 8, color: '#2196F3', name: 'Planet' },
         sun: { mass: 100, radius: 20, color: '#FFC107', name: 'Sun' },
-        blackhole: { mass: 10000, radius: 25, color: '#1A1A1A', name: 'Black Hole' }
+        blackhole: { mass: 10000, radius: 25, color: '#1A1A1A', name: 'Black Hole' },
+        comet: { mass: 0.5, radius: 2, color: '#87CEEB', name: 'Comet' }
     };
 
     const creationSettings = ref({
         mass: 10,
         radius: 8,
         color: '#2196F3',
-        isStatic: true
+        isStatic: true,
+        bodyType: 'planet' as string
     });
 
     const showTrails = ref(true); // Toggle for showing trails

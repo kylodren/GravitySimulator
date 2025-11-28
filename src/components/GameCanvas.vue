@@ -208,7 +208,8 @@ const render = (timestamp: number) => {
         velocity: velocity,
         mass: simulationStore.creationSettings.mass,
         radius: simulationStore.creationSettings.radius,
-        color: simulationStore.creationSettings.color
+        color: simulationStore.creationSettings.color,
+        bodyType: simulationStore.creationSettings.bodyType
       });
       
       // Reset isStatic to false after placing a body
@@ -305,6 +306,75 @@ const render = (timestamp: number) => {
       continue;
     }
 
+    // Draw comet tail if this is a comet
+    if (body.bodyType === 'comet') {
+      // Find nearest massive body (sun or black hole with mass >= 50)
+      let nearestMassive: typeof body | null = null;
+      let minDist = Infinity;
+      
+      for (const other of simulationStore.bodies) {
+        if (other.id !== body.id && other.mass >= 50) {
+          const dist = body.position.dist(other.position);
+          if (dist < minDist) {
+            minDist = dist;
+            nearestMassive = other;
+          }
+        }
+      }
+      
+      if (nearestMassive) {
+        // Calculate direction away from massive body (solar wind effect)
+        const awayDirection = body.position.sub(nearestMassive.position).normalize();
+        const velocity = body.velocity.mag();
+        
+        // Tail length based on distance and velocity
+        const baseTailLength = Math.min(100, 20 + velocity * 0.5);
+        const tailLength = baseTailLength * (1 + Math.min(500, minDist) / 500);
+        
+        // Draw multiple tail streaks with glow effect
+        const numStreaks = 3;
+        for (let i = 0; i < numStreaks; i++) {
+          const spreadAngle = (Math.random() - 0.5) * 0.3; // Random spread
+          const streakLength = tailLength * (0.6 + Math.random() * 0.4);
+          const angle = Math.atan2(awayDirection.y, awayDirection.x) + spreadAngle;
+          
+          const tailEnd = body.position.add(new Vector2(
+            Math.cos(angle) * streakLength,
+            Math.sin(angle) * streakLength
+          ));
+          
+          const tailEndScreen = worldToScreen(tailEnd);
+          
+          // Draw outer glow (widest, most transparent)
+          ctx.beginPath();
+          ctx.moveTo(screenPos.x, screenPos.y);
+          ctx.lineTo(tailEndScreen.x, tailEndScreen.y);
+          ctx.strokeStyle = `rgba(135, 206, 235, ${0.1 - i * 0.05})`;
+          ctx.lineWidth = Math.max(3, (2 - i * 3) * cameraStore.zoom);
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          
+          // Draw middle glow
+          ctx.beginPath();
+          ctx.moveTo(screenPos.x, screenPos.y);
+          ctx.lineTo(tailEndScreen.x, tailEndScreen.y);
+          ctx.strokeStyle = `rgba(173, 216, 230, ${0.2 - i * 0.08})`;
+          ctx.lineWidth = Math.max(2, (5 - i * 2) * cameraStore.zoom);
+          ctx.lineCap = 'round';
+          ctx.stroke();
+          
+          // Draw core streak (brightest, thinnest)
+          ctx.beginPath();
+          ctx.moveTo(screenPos.x, screenPos.y);
+          ctx.lineTo(tailEndScreen.x, tailEndScreen.y);
+          ctx.strokeStyle = `rgba(224, 247, 250, ${0.1 - i * 0.15})`;
+          ctx.lineWidth = Math.max(1.5, (4 - i * 0.8) * cameraStore.zoom);
+          ctx.lineCap = 'round';
+          ctx.stroke();
+        }
+      }
+    }
+    
     ctx.beginPath();
     ctx.arc(screenPos.x, screenPos.y, Math.max(1, screenRadius), 0, Math.PI * 2);
     ctx.fillStyle = body.color;
@@ -384,13 +454,11 @@ const render = (timestamp: number) => {
   
   const fpsText = `FPS: ${currentFPS}`;
   const bodyCountText = `Bodies: ${simulationStore.bodies.length}`;
-  const zoomText = `Zoom: ${cameraStore.zoom.toFixed(2)}x`;
   
   // Measure text width for background
   const maxWidth = Math.max(
     ctx.measureText(fpsText).width,
-    ctx.measureText(bodyCountText).width,
-    ctx.measureText(zoomText).width
+    ctx.measureText(bodyCountText).width
   );
   
   const rightMargin = canvas.value.width - 10;
@@ -398,7 +466,7 @@ const render = (timestamp: number) => {
   
   // Background for readability
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 70);
+  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 50);
   
   // FPS text with color coding
   if (currentFPS >= 50) {
@@ -413,10 +481,6 @@ const render = (timestamp: number) => {
   // Body count
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(bodyCountText, rightMargin - 10, topMargin + 40);
-  
-  // Zoom level
-  ctx.fillStyle = '#FFFFFF';
-  ctx.fillText(zoomText, rightMargin - 10, topMargin + 60);
   
   ctx.restore();
 
@@ -535,7 +599,8 @@ const onMouseMove = (e: MouseEvent) => {
         velocity: new Vector2(0, 0),
         mass: simulationStore.creationSettings.mass,
         radius: simulationStore.creationSettings.radius,
-        color: simulationStore.creationSettings.color
+        color: simulationStore.creationSettings.color,
+        bodyType: simulationStore.creationSettings.bodyType
       });
       
       // Reset isStatic to false after placing a body
@@ -590,13 +655,31 @@ const onMouseUp = (e: MouseEvent) => {
     const pullVector = actualStartPos.sub(endPos);
     const velocity = pullVector.mult(SLINGSHOT_VELOCITY.value);
 
+    // Debug logging for manual launch
+    console.log('=== Manual Launch Debug Info ===');
+    console.log('Body Position:', { x: actualStartPos.x, y: actualStartPos.y });
+    console.log('Velocity:', { x: velocity.x, y: velocity.y });
+    console.log('Velocity Magnitude:', velocity.mag());
+    console.log('Body Mass:', simulationStore.creationSettings.mass);
+    console.log('Body Radius:', simulationStore.creationSettings.radius);
+    
+    // Check distance from any static bodies (suns)
+    const staticBodies = simulationStore.bodies.filter(b => b.isStatic);
+    staticBodies.forEach(sun => {
+      const distance = actualStartPos.dist(sun.position);
+      console.log(`Distance from Sun at (${sun.position.x}, ${sun.position.y}):`, distance);
+      console.log('Sun Mass:', sun.mass);
+      console.log('Expected circular orbit speed at this distance:', Math.sqrt(1000000.0 * sun.mass / distance));
+    });
+
     simulationStore.addBody({
       id: crypto.randomUUID(),
       position: actualStartPos,
       velocity: velocity,
       mass: simulationStore.creationSettings.mass,
       radius: simulationStore.creationSettings.radius,
-      color: simulationStore.creationSettings.color
+      color: simulationStore.creationSettings.color,
+      bodyType: simulationStore.creationSettings.bodyType
     });
     
     // Reset isStatic to false after placing a body
@@ -625,7 +708,7 @@ const onWheel = (e: WheelEvent) => {
   // Calculate new zoom
   const zoomSpeed = 0.1;
   const oldZoom = cameraStore.zoom;
-  const newZoom = Math.max(0.01, Math.min(oldZoom - Math.sign(e.deltaY) * zoomSpeed * oldZoom, 10.0));
+  const newZoom = Math.max(0.01, Math.min(oldZoom - Math.sign(e.deltaY) * zoomSpeed * oldZoom, 100.0));
   
   // To keep the world point under the cursor fixed:
   // We need to adjust the offset so that the same world point stays under the mouse
@@ -748,7 +831,7 @@ const onTouchMove = (e: TouchEvent) => {
       // Handle pinch zoom
       if (initialPinchDistance !== null) {
         const zoomFactor = currentDistance / initialPinchDistance;
-        const newZoom = Math.max(0.01, Math.min(initialZoom * zoomFactor, 10.0));
+        const newZoom = Math.max(0.01, Math.min(initialZoom * zoomFactor, 100.0));
         
         // Zoom towards the center of the pinch
         const canvasCenter = new Vector2(canvas.value.width / 2, canvas.value.height / 2);

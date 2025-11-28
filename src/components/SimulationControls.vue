@@ -102,6 +102,14 @@
             </div>
             <div
               class="mass-option-compact"
+              :class="{ 'mass-option-active': selectedMassType === 'comet' }"
+              @click="selectMassType('comet')"
+              data-body-type="comet"
+            >
+              <CometIcon :size="32" />
+            </div>
+            <div
+              class="mass-option-compact"
               :class="{ 'mass-option-active': selectedMassType === 'planet' }"
               @click="selectMassType('planet')"
               data-body-type="planet"
@@ -153,17 +161,19 @@ import AsteroidIcon from './AsteroidIcon.vue';
 import PlanetIcon from './PlanetIcon.vue';
 import SunIcon from './SunIcon.vue';
 import BlackHoleIcon from './BlackHoleIcon.vue';
+import CometIcon from './CometIcon.vue';
 
 const simulationStore = useSimulationStore();
-const selectedMassType = ref<'asteroid' | 'planet' | 'sun' | 'blackhole'>('sun');
+const selectedMassType = ref<'asteroid' | 'comet' | 'planet' | 'sun' | 'blackhole'>('sun');
 const selectedSpeedIndex = ref('1.0');
 
-const selectMassType = (type: 'asteroid' | 'planet' | 'sun' | 'blackhole') => {
+const selectMassType = (type: 'asteroid' | 'comet' | 'planet' | 'sun' | 'blackhole') => {
   selectedMassType.value = type;
   const preset = simulationStore.massPresets[type];
   simulationStore.creationSettings.mass = preset.mass;
   simulationStore.creationSettings.radius = preset.radius;
   simulationStore.creationSettings.color = preset.color;
+  simulationStore.creationSettings.bodyType = type;
   // Don't touch isStatic - let user control it
 };
 

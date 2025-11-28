@@ -12,6 +12,7 @@ export interface Body {
     mass: number;
     radius: number;
     color: string;
+    bodyType?: string; // 'asteroid', 'planet', 'sun', 'blackhole', 'comet'
     trail?: TrailPoint[]; // Optional trail of previous positions with velocities
     isStatic?: boolean; // If true, position will not update
     trailMinVel?: number; // Cached minimum velocity in trail
