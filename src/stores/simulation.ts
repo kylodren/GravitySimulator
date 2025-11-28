@@ -28,6 +28,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     });
 
     const showTrails = ref(true); // Toggle for showing trails
+    const enableEffects = ref(true); // Toggle for trail visual effects (glow, gradients, multi-layer rendering)
     const allowSameTypeInteraction = ref(false); // If false, same body types don't interact
     const showIntroTour = ref(true); // Control intro tour visibility
 
@@ -89,6 +90,7 @@ export const useSimulationStore = defineStore('simulation', () => {
         creationSettings,
         massPresets,
         showTrails,
+        enableEffects,
         allowSameTypeInteraction,
         showIntroTour,
         addBody,

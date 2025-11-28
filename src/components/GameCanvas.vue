@@ -48,6 +48,17 @@ let lastTime = 0;
 let fpsFrames = 0;
 let fpsLastTime = 0;
 let currentFPS = 60;
+const fpsHistory: number[] = []; // Rolling window of FPS samples
+const FPS_HISTORY_SIZE = 20; // Track last 20 FPS readings
+let lowFpsFrameCount = 0; // Consecutive frames below threshold
+let highFpsFrameCount = 0; // Consecutive frames above threshold
+const LOW_FPS_THRESHOLD = 20;
+const HIGH_FPS_THRESHOLD = 35;
+const LOW_FPS_DURATION = 10; // ~1 second at 60fps
+const HIGH_FPS_DURATION = 20; // ~2 seconds at 60fps
+const targetTrailLength = ref(300);
+const MIN_TRAIL_LENGTH = 50;
+const MAX_TRAIL_LENGTH = 300;
 
 // Slingshot configuration
 const SLINGSHOT_VELOCITY_DESKTOP = 2.0; // Velocity multiplier for desktop
@@ -119,8 +130,55 @@ const render = (timestamp: number) => {
   fpsFrames++;
   if (timestamp - fpsLastTime >= 1000) { // Update every second
     currentFPS = Math.round((fpsFrames * 1000) / (timestamp - fpsLastTime));
+    
+    // Add to FPS history for rolling average
+    fpsHistory.push(currentFPS);
+    if (fpsHistory.length > FPS_HISTORY_SIZE) {
+      fpsHistory.shift();
+    }
+    
     fpsFrames = 0;
     fpsLastTime = timestamp;
+  }
+  
+  // Check FPS and adjust trail length (hysteresis to prevent oscillation)
+  if (fpsHistory.length >= 5) {
+    const avgFPS = fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
+    
+    // Low FPS detection with duration requirement
+    if (avgFPS < LOW_FPS_THRESHOLD) {
+      lowFpsFrameCount++;
+      highFpsFrameCount = 0;
+      
+      if (lowFpsFrameCount >= LOW_FPS_DURATION && targetTrailLength.value > MIN_TRAIL_LENGTH) {
+        targetTrailLength.value = Math.max(MIN_TRAIL_LENGTH, Math.floor(targetTrailLength.value * 0.5));
+        console.log(`FPS too low (${avgFPS.toFixed(1)}), reducing trail length to ${targetTrailLength.value}`);
+        lowFpsFrameCount = 0;
+        
+        // Trim existing trails immediately
+        for (const body of simulationStore.bodies) {
+          if (body.trail && body.trail.length > targetTrailLength.value) {
+            body.trail = body.trail.slice(-targetTrailLength.value);
+          }
+        }
+      }
+    }
+    // High FPS detection with longer duration requirement
+    else if (avgFPS > HIGH_FPS_THRESHOLD) {
+      highFpsFrameCount++;
+      lowFpsFrameCount = 0;
+      
+      if (highFpsFrameCount >= HIGH_FPS_DURATION && targetTrailLength.value < MAX_TRAIL_LENGTH) {
+        targetTrailLength.value = Math.min(MAX_TRAIL_LENGTH, Math.floor(targetTrailLength.value * 1.5));
+        console.log(`FPS stable (${avgFPS.toFixed(1)}), increasing trail length to ${targetTrailLength.value}`);
+        highFpsFrameCount = 0;
+      }
+    }
+    // Reset counters if in middle range
+    else {
+      lowFpsFrameCount = 0;
+      highFpsFrameCount = 0;
+    }
   }
 
   // Update Physics
@@ -187,8 +245,8 @@ const render = (timestamp: number) => {
           body.trailMaxVel = currentVel;
         }
         
-        // Limit trail length
-        if (body.trail.length > 300) {
+        // Limit trail length to dynamic value
+        if (body.trail.length > targetTrailLength.value) {
           const removed = body.trail.shift();
           // If we removed the min or max, recalculate from remaining points
           if (removed && (removed.velocity === body.trailMinVel || removed.velocity === body.trailMaxVel)) {
@@ -292,7 +350,7 @@ const render = (timestamp: number) => {
         // Draw more points for smoother trails (reduce sampling)
         const sampleRate = Math.max(1, Math.floor(body.trail.length / 500));
         
-        // Draw trail as smooth colored segments using quadratic curves
+        // Draw trail as smooth colored segments with glow and temporal fade
         for (let i = 0; i < body.trail.length - 1; i += sampleRate) {
           const point = body.trail[i];
           const nextIdx = Math.min(i + sampleRate, body.trail.length - 1);
@@ -300,34 +358,82 @@ const render = (timestamp: number) => {
           
           if (!point || !nextPoint) continue;
           
+          // Temporal fade: older segments fade out faster (i=0 is oldest, length-1 is newest)
+          const age = i / (body.trail.length - 1);
+          const fadeAlpha = Math.pow(age, 2); // Quadratic fade: 0 to 1, fades faster at start
+          
           // Find percentile rank of this point's velocity (0-1)
           const rank = velocities.findIndex(v => v >= point.velocity);
           const relSpeed = rank / (velocities.length - 1);
           
-          // Map to full color spectrum: 240 (blue/slow) -> 0 (red/fast)
-          const hue = Math.round(240 - (relSpeed * 240));
-          const saturation = 100;
+          // Get colors for current and next point for gradient
+          const hue1 = Math.round(240 - (relSpeed * 240));
+          const nextRank = velocities.findIndex(v => v >= nextPoint.velocity);
+          const nextRelSpeed = nextRank / (velocities.length - 1);
+          const hue2 = Math.round(240 - (nextRelSpeed * 240));
           
-          ctx.beginPath();
+          const saturation = 100;
+          const baseWidth = Math.max(1, body.radius * cameraStore.zoom * 0.3);
+          
           const screenStart = worldToScreen(point.position);
           const screenEnd = worldToScreen(nextPoint.position);
           
-          // Use quadratic curve if we have a midpoint
-          if (i + Math.floor(sampleRate / 2) < body.trail.length - 1 && sampleRate > 1) {
-            const midPoint = body.trail[i + Math.floor(sampleRate / 2)];
-            if (midPoint) {
-              const screenMid = worldToScreen(midPoint.position);
+          // Create path once for reuse
+          const drawPath = () => {
+            ctx.beginPath();
+            if (body.trail && i + Math.floor(sampleRate / 2) < body.trail.length - 1 && sampleRate > 1) {
+              const midPoint = body.trail[i + Math.floor(sampleRate / 2)];
+              if (midPoint) {
+                const screenMid = worldToScreen(midPoint.position);
+                ctx.moveTo(screenStart.x, screenStart.y);
+                ctx.quadraticCurveTo(screenMid.x, screenMid.y, screenEnd.x, screenEnd.y);
+              }
+            } else {
               ctx.moveTo(screenStart.x, screenStart.y);
-              ctx.quadraticCurveTo(screenMid.x, screenMid.y, screenEnd.x, screenEnd.y);
+              ctx.lineTo(screenEnd.x, screenEnd.y);
             }
-          } else {
-            ctx.moveTo(screenStart.x, screenStart.y);
-            ctx.lineTo(screenEnd.x, screenEnd.y);
-          }
+          };
           
-          ctx.strokeStyle = `hsla(${hue}, ${saturation}%, 50%, 0.5)`;
-          ctx.lineWidth = Math.max(1, body.radius * cameraStore.zoom * 0.3);
-          ctx.stroke();
+          // Draw trail with or without visual effects based on setting
+          if (simulationStore.enableEffects) {
+            // Draw glow layers (outer to inner) - increased widths and opacity
+            // Outer glow (widest)
+            drawPath();
+            const gradient1 = ctx.createLinearGradient(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y);
+            gradient1.addColorStop(0, `hsla(${hue1}, ${saturation}%, 50%, ${0.25 * fadeAlpha})`);
+            gradient1.addColorStop(1, `hsla(${hue2}, ${saturation}%, 50%, ${0.25 * fadeAlpha})`);
+            ctx.strokeStyle = gradient1;
+            ctx.lineWidth = baseWidth * 5;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+            
+            // Middle glow
+            drawPath();
+            const gradient2 = ctx.createLinearGradient(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y);
+            gradient2.addColorStop(0, `hsla(${hue1}, ${saturation}%, 50%, ${0.5 * fadeAlpha})`);
+            gradient2.addColorStop(1, `hsla(${hue2}, ${saturation}%, 50%, ${0.5 * fadeAlpha})`);
+            ctx.strokeStyle = gradient2;
+            ctx.lineWidth = baseWidth * 2.5;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+            
+            // Core/bright center
+            drawPath();
+            const gradient3 = ctx.createLinearGradient(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y);
+            gradient3.addColorStop(0, `hsla(${hue1}, ${saturation}%, 70%, ${1.0 * fadeAlpha})`);
+            gradient3.addColorStop(1, `hsla(${hue2}, ${saturation}%, 70%, ${1.0 * fadeAlpha})`);
+            ctx.strokeStyle = gradient3;
+            ctx.lineWidth = baseWidth * 1.2;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+          } else {
+            // Simple rendering: solid color without gradients or glow
+            drawPath();
+            ctx.strokeStyle = `hsla(${hue1}, ${saturation}%, 60%, ${fadeAlpha})`;
+            ctx.lineWidth = baseWidth;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+          }
         }
       }
     }
@@ -493,12 +599,14 @@ const render = (timestamp: number) => {
   const fpsText = `FPS: ${currentFPS}`;
   const bodyCountText = `Bodies: ${simulationStore.bodies.length}`;
   const zoomText = `Zoom: ${cameraStore.zoom.toFixed(2)}x`;
+  const trailText = `Trail Length: ${targetTrailLength.value}`;
   
   // Measure text width for background
   const maxWidth = Math.max(
     ctx.measureText(fpsText).width,
     ctx.measureText(bodyCountText).width,
-    ctx.measureText(zoomText).width
+    ctx.measureText(zoomText).width,
+    ctx.measureText(trailText).width
   );
   
   const rightMargin = canvas.value.width - 10;
@@ -506,7 +614,7 @@ const render = (timestamp: number) => {
   
   // Background for readability
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 70);
+  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 90);
   
   // FPS text with color coding
   if (currentFPS >= 50) {
@@ -525,6 +633,10 @@ const render = (timestamp: number) => {
   // Zoom level
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(zoomText, rightMargin - 10, topMargin + 60);
+  
+  // Trail length
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(trailText, rightMargin - 10, topMargin + 80);
   
   ctx.restore();
 

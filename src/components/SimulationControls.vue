@@ -62,6 +62,19 @@
             </template>
             <span>Same-Type Interaction: {{ simulationStore.allowSameTypeInteraction ? 'On' : 'Off' }}</span>
           </v-tooltip>
+          <v-tooltip location="bottom">
+            <template v-slot:activator="{ props }">
+              <v-btn
+                v-bind="props"
+                icon="mdi-shimmer"
+                @click="simulationStore.enableEffects = !simulationStore.enableEffects"
+                :color="simulationStore.enableEffects ? 'primary' : 'default'"
+                size="small"
+                variant="tonal"
+              ></v-btn>
+            </template>
+            <span>Visual Effects: {{ simulationStore.enableEffects ? 'On' : 'Off' }} (G)</span>
+          </v-tooltip>
           </div>
         </div>
 
@@ -235,6 +248,10 @@ const handleKeyDown = (e: KeyboardEvent) => {
     case 'arrowleft':
       e.preventDefault();
       decreaseSpeed();
+      break;
+    case 'g':
+      e.preventDefault();
+      simulationStore.enableEffects = !simulationStore.enableEffects;
       break;
   }
 };
