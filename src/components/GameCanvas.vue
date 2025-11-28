@@ -10,7 +10,8 @@
       class="slingshot-tooltip"
       :style="{ left: currentMouseScreenPos.x + 20 + 'px', top: currentMouseScreenPos.y - 10 + 'px' }"
     >
-      Hold down <span class="key">Shift</span> for Multiple
+      <span class="desktop-hint">Hold <span class="key">Shift</span> for Multiple</span>
+      <span class="mobile-hint">Tap & Hold 2nd Finger for Multiple</span>
     </div>
   </div>
 </template>
@@ -158,8 +159,8 @@ const render = (timestamp: number) => {
     }
   }
 
-  // Handle Shift + Slingshot spawning
-  if (isSlingshotting && isShiftPressed && slingshotStartPos) {
+  // Handle Shift + Slingshot spawning (or mobile multi-spawn)
+  if (isSlingshotting.value && (isShiftPressed || isMobileMultiSpawn) && slingshotStartPos) {
     const now = performance.now();
     if (now - lastShiftSpawnTime >= SHIFT_SPAWN_INTERVAL) {
       let actualStartPos = slingshotStartPos;
@@ -477,6 +478,7 @@ let slingshotStartPos: Vector2 | null = null;
 let slingshotLockedBodyId: string | null = null; // Track if slingshot was started while locked to a body
 const isSlingshotting = ref(false);
 let isShiftPressed = false;
+let isMobileMultiSpawn = false; // For mobile: second finger enables multi-spawn
 let lastShiftSpawnTime = 0;
 const SHIFT_SPAWN_INTERVAL = 100; // 10 bodies per second (1000ms / 10 = 100ms)
 let currentMouseScreenPos = new Vector2(0, 0);
@@ -682,22 +684,29 @@ const onTouchStart = (e: TouchEvent) => {
       onMouseDown(mouseEvent);
     }
   } else if (e.touches.length === 2) {
-    // Two finger - setup for pinch zoom and pan
-    const touch1 = e.touches[0];
-    const touch2 = e.touches[1];
-    if (touch1 && touch2) {
-      initialPinchDistance = getTouchDistance(touch1, touch2);
-      initialZoom = cameraStore.zoom;
-      const center = getTouchCenter(touch1, touch2);
-      lastMousePos = center;
-      isDragging = true;
-      
-      // Cancel any ongoing slingshot
-      if (isSlingshotting.value) {
-        isSlingshotting.value = false;
-        slingshotStartPos = null;
-        slingshotLockedBodyId = null;
-        ghostPath.value = [];
+    // Two finger during slingshot = enable multi-spawn mode
+    // Two finger otherwise = pinch zoom and pan
+    if (isSlingshotting.value) {
+      // Enable mobile multi-spawn mode
+      isMobileMultiSpawn = true;
+    } else {
+      // Setup for pinch zoom and pan
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      if (touch1 && touch2) {
+        initialPinchDistance = getTouchDistance(touch1, touch2);
+        initialZoom = cameraStore.zoom;
+        const center = getTouchCenter(touch1, touch2);
+        lastMousePos = center;
+        isDragging = true;
+        
+        // Cancel any ongoing slingshot
+        if (isSlingshotting.value) {
+          isSlingshotting.value = false;
+          slingshotStartPos = null;
+          slingshotLockedBodyId = null;
+          ghostPath.value = [];
+        }
       }
     }
   }
@@ -709,8 +718,18 @@ const onTouchMove = (e: TouchEvent) => {
   // Block interaction during tour
   if (simulationStore.showIntroTour) return;
   
-  if (e.touches.length === 1 && isSlingshotting) {
+  if (e.touches.length === 1 && isSlingshotting.value) {
     // Single touch move - slingshot drag
+    const touch = e.touches[0];
+    if (touch) {
+      const mouseEvent = new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      });
+      onMouseMove(mouseEvent);
+    }
+  } else if (e.touches.length === 2 && isSlingshotting.value && isMobileMultiSpawn) {
+    // Two fingers with multi-spawn mode - continue tracking first finger
     const touch = e.touches[0];
     if (touch) {
       const mouseEvent = new MouseEvent('mousemove', {
@@ -765,7 +784,7 @@ const onTouchEnd = (e: TouchEvent) => {
   
   if (e.touches.length === 0) {
     // All touches released
-    if (isSlingshotting) {
+    if (isSlingshotting.value) {
       const mouseEvent = new MouseEvent('mouseup', {
         clientX: currentMouseScreenPos.x,
         clientY: currentMouseScreenPos.y,
@@ -775,10 +794,17 @@ const onTouchEnd = (e: TouchEvent) => {
     }
     isDragging = false;
     initialPinchDistance = null;
+    isMobileMultiSpawn = false;
   } else if (e.touches.length === 1) {
-    // One finger left - reset pinch
-    initialPinchDistance = null;
-    isDragging = false;
+    // One finger left
+    if (isMobileMultiSpawn) {
+      // Second finger released - continue slingshot with first finger
+      isMobileMultiSpawn = false;
+    } else {
+      // Reset pinch
+      initialPinchDistance = null;
+      isDragging = false;
+    }
   }
 };
 
@@ -870,5 +896,25 @@ canvas {
   font-family: monospace;
   font-weight: bold;
   color: #82B1FF;
+}
+
+/* Show desktop hint by default, hide mobile hint */
+.slingshot-tooltip .mobile-hint {
+  display: none;
+}
+
+.slingshot-tooltip .desktop-hint {
+  display: inline;
+}
+
+/* On mobile/touch devices, show mobile hint and hide desktop hint */
+@media (max-width: 768px), (hover: none) {
+  .slingshot-tooltip .mobile-hint {
+    display: inline;
+  }
+  
+  .slingshot-tooltip .desktop-hint {
+    display: none;
+  }
 }
 </style>
