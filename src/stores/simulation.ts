@@ -15,7 +15,6 @@ export const useSimulationStore = defineStore('simulation', () => {
         asteroid: { mass: 1, radius: 3, color: '#808080', name: 'Asteroid' },
         planet: { mass: 10, radius: 8, color: '#2196F3', name: 'Planet' },
         sun: { mass: 100, radius: 20, color: '#FFC107', name: 'Sun' },
-        blackhole: { mass: 10000, radius: 25, color: '#1A1A1A', name: 'Black Hole' },
         comet: { mass: 0.5, radius: 2, color: '#87CEEB', name: 'Comet' }
     };
 
@@ -31,6 +30,8 @@ export const useSimulationStore = defineStore('simulation', () => {
     const enableEffects = ref(true); // Toggle for trail visual effects (glow, gradients, multi-layer rendering)
     const allowSameTypeInteraction = ref(false); // If false, same body types don't interact
     const showIntroTour = ref(true); // Control intro tour visibility
+    const trailLength = ref(150); // Trail length control
+    const autoTrails = ref(false); // Oscillating trail mode
 
     // Actions
     function addBody(body: Body) {
@@ -93,6 +94,8 @@ export const useSimulationStore = defineStore('simulation', () => {
         enableEffects,
         allowSameTypeInteraction,
         showIntroTour,
+        trailLength,
+        autoTrails,
         addBody,
         update,
         reset,

@@ -78,28 +78,63 @@
           </div>
         </div>
 
-        <!-- Center: Speed Control -->
+        <!-- Center: Speed and Trail Controls -->
         <div class="controls-section controls-center">
+          <!-- Speed Control -->
+          <div class="control-group">
+            <span class="control-label mb-n3">Speed</span>
+            <div class="d-flex align-center">
+              <v-btn
+                icon="mdi-minus"
+                @click="decreaseSpeed"
+                size="small"
+                variant="text"
+              ></v-btn>
+              <span class="control-value">{{ selectedSpeedIndex }}x</span>
+              <v-btn
+                icon="mdi-plus"
+                @click="increaseSpeed"
+                size="small"
+                variant="text"
+              ></v-btn>
+            </div>
+          </div>
+          
+          
+          <!-- Trail Length Control -->
+          <div class="control-group">
+            <span class="control-label mb-n3">Trail Length</span>
+            <div class="d-flex align-center">
+              <v-btn
+                icon="mdi-minus"
+                @click="decreaseTrailLength"
+                size="small"
+                variant="text"
+              ></v-btn>
+              <span class="control-value">{{ trailLength }}</span>
+              <v-btn
+                icon="mdi-plus"
+                @click="increaseTrailLength"
+                size="small"
+                variant="text"
+              ></v-btn>
+            </div>
+          </div>
+          
+          <!-- Auto Trails Toggle -->
           <v-tooltip location="bottom">
             <template v-slot:activator="{ props }">
-              <span v-bind="props" class="speed-label">Speed:</span>
+              <v-btn
+                v-bind="props"
+                icon="mdi-sine-wave"
+                @click="toggleAutoTrails"
+                :color="autoTrails ? 'primary' : 'default'"
+                size="small"
+                variant="tonal"
+              ></v-btn>
             </template>
-            <span>← Slower | Faster →</span>
+            <span>Auto Trails: {{ autoTrails ? 'On' : 'Off' }}</span>
           </v-tooltip>
-          <v-chip-group
-            v-model="selectedSpeedIndex"
-            @update:model-value="updateTimeScale"
-            mandatory
-            selected-class="speed-chip-active"
-            color="primary"
-          >
-            <v-chip value="0.25" size="x-small">0.25x</v-chip>
-            <v-chip value="0.5" size="x-small">0.5x</v-chip>
-            <v-chip value="1.0" size="x-small">1.0x</v-chip>
-            <v-chip value="1.5" size="x-small">1.5x</v-chip>
-            <v-chip value="2.0" size="x-small">2.0x</v-chip>
-            <v-chip value="3.0" size="x-small">3.0x</v-chip>
-          </v-chip-group>
         </div>
 
         <!-- Right: Body Type Selection -->
@@ -137,14 +172,6 @@
             >
               <SunIcon :size="32" />
             </div>
-            <div
-              class="mass-option-compact"
-              :class="{ 'mass-option-active': selectedMassType === 'blackhole' }"
-              @click="selectMassType('blackhole')"
-              data-body-type="blackhole"
-            >
-              <BlackHoleIcon :size="32" />
-            </div>
           </div>
           <v-divider vertical class="divider-desktop"></v-divider>
           <div class="d-flex align-center" style="gap: 6px;">
@@ -162,25 +189,39 @@
       </div>
     </v-card>
     </div>
+    
+    <!-- Mobile Toggle Button -->
+    <div class="mobile-toggle-container" :class="{ 'controls-hidden': !isVisible }">
+      <v-btn
+        @click="isVisible = !isVisible"
+        :icon="isVisible ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+        size="small"
+        variant="tonal"
+        class="mobile-toggle-btn"
+      ></v-btn>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useSimulationStore } from '../stores/simulation';
 
 const isVisible = ref(true);
 import AsteroidIcon from './AsteroidIcon.vue';
 import PlanetIcon from './PlanetIcon.vue';
 import SunIcon from './SunIcon.vue';
-import BlackHoleIcon from './BlackHoleIcon.vue';
 import CometIcon from './CometIcon.vue';
 
 const simulationStore = useSimulationStore();
-const selectedMassType = ref<'asteroid' | 'comet' | 'planet' | 'sun' | 'blackhole'>('sun');
+const selectedMassType = ref<'asteroid' | 'comet' | 'planet' | 'sun'>('sun');
 const selectedSpeedIndex = ref('1.0');
 
-const selectMassType = (type: 'asteroid' | 'comet' | 'planet' | 'sun' | 'blackhole') => {
+// Expose trail length and autoTrails from store for template
+const trailLength = computed(() => simulationStore.trailLength);
+const autoTrails = computed(() => simulationStore.autoTrails);
+
+const selectMassType = (type: 'asteroid' | 'comet' | 'planet' | 'sun') => {
   selectedMassType.value = type;
   const preset = simulationStore.massPresets[type];
   simulationStore.creationSettings.mass = preset.mass;
@@ -221,6 +262,18 @@ const decreaseSpeed = () => {
       updateTimeScale(selectedSpeedIndex.value);
     }
   }
+};
+
+const increaseTrailLength = () => {
+  simulationStore.trailLength = Math.min(300, simulationStore.trailLength + 10);
+};
+
+const decreaseTrailLength = () => {
+  simulationStore.trailLength = Math.max(0, simulationStore.trailLength - 10);
+};
+
+const toggleAutoTrails = () => {
+  simulationStore.autoTrails = !simulationStore.autoTrails;
 };
 
 // Keyboard shortcuts
@@ -352,6 +405,33 @@ selectMassType('sun');
   margin-right: 4px;
 }
 
+.control-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0px 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.control-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.control-value {
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 40px;
+  text-align: center;
+}
+
 .switch-label-compact {
   font-size: 11px;
   font-weight: 500;
@@ -397,5 +477,37 @@ selectMassType('sun');
   background-clip: text;
   margin: 0;
   padding: 0;
+}
+
+.mobile-toggle-container {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-toggle-container {
+    display: flex;
+    justify-content: flex-start;
+    position: fixed;
+    top: 136px;
+    left: -2px;
+    transform: translateY(-50%);
+    z-index: 101;
+    pointer-events: none;
+    padding-left: 8px;
+    transition: top 0.3s ease;
+  }
+  
+  .mobile-toggle-container.controls-hidden {
+    top: 30px;
+  }
+  
+  .mobile-toggle-btn {
+    pointer-events: auto;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+  
+  .top-bar-container {
+    transition: transform 0.3s ease, opacity 0.3s ease;
+  }
 }
 </style>

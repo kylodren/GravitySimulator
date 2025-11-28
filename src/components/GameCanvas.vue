@@ -4,20 +4,6 @@
     <div class="overlay-ui">
       <!-- We'll add UI controls here later or in a separate component -->
     </div>
-    <!-- Multiple Bodies Button (mobile only) -->
-    <div 
-      v-if="isSlingshotting && slingshotStartPos"
-      class="multiple-button-container"
-    >
-      <button 
-        class="multiple-button"
-        :class="{ active: isMultipleMode }"
-        @mousedown.stop="toggleMultipleMode"
-        @touchstart.stop="toggleMultipleMode"
-      >
-        Multiple
-      </button>
-    </div>
     
     <!-- Shift tooltip (desktop only) -->
     <div 
@@ -44,21 +30,16 @@ const cameraStore = useCameraStore();
 let animationFrameId: number;
 let lastTime = 0;
 
-// Performance tracking
+// FPS tracking
 let fpsFrames = 0;
 let fpsLastTime = 0;
 let currentFPS = 60;
-const fpsHistory: number[] = []; // Rolling window of FPS samples
-const FPS_HISTORY_SIZE = 20; // Track last 20 FPS readings
-let lowFpsFrameCount = 0; // Consecutive frames below threshold
-let highFpsFrameCount = 0; // Consecutive frames above threshold
-const LOW_FPS_THRESHOLD = 20;
-const HIGH_FPS_THRESHOLD = 35;
-const LOW_FPS_DURATION = 10; // ~1 second at 60fps
-const HIGH_FPS_DURATION = 20; // ~2 seconds at 60fps
-const targetTrailLength = ref(300);
-const MIN_TRAIL_LENGTH = 50;
+
+// Trail length controls
+const MIN_TRAIL_LENGTH = 0;
 const MAX_TRAIL_LENGTH = 300;
+let animationPhase = 0; // 0 to 2π for sine wave
+const ANIMATION_SPEED = 0.01; // How fast the animation cycles (higher = faster)
 
 // Slingshot configuration
 const SLINGSHOT_VELOCITY_DESKTOP = 2.0; // Velocity multiplier for desktop
@@ -128,61 +109,45 @@ const render = (timestamp: number) => {
 
   // Calculate FPS
   fpsFrames++;
-  if (timestamp - fpsLastTime >= 1000) { // Update every second
+  if (timestamp - fpsLastTime >= 1000) {
     currentFPS = Math.round((fpsFrames * 1000) / (timestamp - fpsLastTime));
-    
-    // Add to FPS history for rolling average
-    fpsHistory.push(currentFPS);
-    if (fpsHistory.length > FPS_HISTORY_SIZE) {
-      fpsHistory.shift();
-    }
-    
     fpsFrames = 0;
     fpsLastTime = timestamp;
   }
-  
-  // Check FPS and adjust trail length (hysteresis to prevent oscillation)
-  if (fpsHistory.length >= 5) {
-    const avgFPS = fpsHistory.reduce((a, b) => a + b, 0) / fpsHistory.length;
+
+  // Trail length management
+  if (simulationStore.autoTrails) {
+    // Auto trails mode: smoothly animate trail length
+    animationPhase += ANIMATION_SPEED;
+    if (animationPhase > Math.PI * 2) {
+      animationPhase -= Math.PI * 2;
+    }
     
-    // Low FPS detection with duration requirement
-    if (avgFPS < LOW_FPS_THRESHOLD) {
-      lowFpsFrameCount++;
-      highFpsFrameCount = 0;
-      
-      if (lowFpsFrameCount >= LOW_FPS_DURATION && targetTrailLength.value > MIN_TRAIL_LENGTH) {
-        targetTrailLength.value = Math.max(MIN_TRAIL_LENGTH, Math.floor(targetTrailLength.value * 0.5));
-        console.log(`FPS too low (${avgFPS.toFixed(1)}), reducing trail length to ${targetTrailLength.value}`);
-        lowFpsFrameCount = 0;
-        
-        // Trim existing trails immediately
-        for (const body of simulationStore.bodies) {
-          if (body.trail && body.trail.length > targetTrailLength.value) {
-            body.trail = body.trail.slice(-targetTrailLength.value);
-          }
-        }
-      }
-    }
-    // High FPS detection with longer duration requirement
-    else if (avgFPS > HIGH_FPS_THRESHOLD) {
-      highFpsFrameCount++;
-      lowFpsFrameCount = 0;
-      
-      if (highFpsFrameCount >= HIGH_FPS_DURATION && targetTrailLength.value < MAX_TRAIL_LENGTH) {
-        targetTrailLength.value = Math.min(MAX_TRAIL_LENGTH, Math.floor(targetTrailLength.value * 1.5));
-        console.log(`FPS stable (${avgFPS.toFixed(1)}), increasing trail length to ${targetTrailLength.value}`);
-        highFpsFrameCount = 0;
-      }
-    }
-    // Reset counters if in middle range
-    else {
-      lowFpsFrameCount = 0;
-      highFpsFrameCount = 0;
-    }
+    // Use absolute sine wave for smooth oscillation: goes 0->1->0->1
+    const sineWave = Math.sin(animationPhase);
+    const absValue = Math.abs(sineWave); // 0 to 1 and back, repeatedly
+    
+    // INVERT so we start at 1 (fast at 0/300) and slow in middle
+    const inverted = 1 - absValue; // 1 to 0 and back (1 at edges, 0 in middle)
+    
+    // Apply power less than 1 to make it even faster at edges
+    const easedValue = Math.pow(inverted, 0.3); // Power < 1 makes edges steeper
+    
+    // Map from [0, 1] to [MIN_TRAIL_LENGTH, MAX_TRAIL_LENGTH]
+    simulationStore.trailLength = Math.round(
+      MIN_TRAIL_LENGTH + easedValue * (MAX_TRAIL_LENGTH - MIN_TRAIL_LENGTH)
+    );
   }
 
   // Update Physics
   simulationStore.update(dt);
+  
+  // Trim all trails to match current target length (always, not just auto mode)
+  for (const body of simulationStore.bodies) {
+    if (body.trail && body.trail.length > simulationStore.trailLength) {
+      body.trail = body.trail.slice(-simulationStore.trailLength);
+    }
+  }
 
   // Update trails for visible bodies only (performance optimization)
   if (simulationStore.showTrails && canvas.value) {
@@ -200,7 +165,15 @@ const render = (timestamp: number) => {
       );
 
       if (isVisible) {
-        // Add trail point for visible bodies
+        // Add trail point for visible bodies (except comets)
+        if (body.bodyType === 'comet') {
+          // Comets never have trails
+          if (body.trail && body.trail.length > 0) {
+            body.trail = [];
+          }
+          continue;
+        }
+        
         if (!body.trail) body.trail = [];
         const currentVel = body.velocity.mag();
         
@@ -246,7 +219,7 @@ const render = (timestamp: number) => {
         }
         
         // Limit trail length to dynamic value
-        if (body.trail.length > targetTrailLength.value) {
+        if (body.trail.length > simulationStore.trailLength) {
           const removed = body.trail.shift();
           // If we removed the min or max, recalculate from remaining points
           if (removed && (removed.velocity === body.trailMinVel || removed.velocity === body.trailMaxVel)) {
@@ -265,8 +238,8 @@ const render = (timestamp: number) => {
     }
   }
 
-  // Handle Shift + Slingshot spawning or Multiple button
-  if (isSlingshotting.value && (isShiftPressed || isMultipleMode.value) && slingshotStartPos) {
+  // Handle Shift + Slingshot spawning (desktop only)
+  if (isSlingshotting.value && isShiftPressed && !isTouchDevice.value && slingshotStartPos) {
     const now = performance.now();
     if (now - lastShiftSpawnTime >= SHIFT_SPAWN_INTERVAL) {
       let actualStartPos = slingshotStartPos;
@@ -593,13 +566,13 @@ const render = (timestamp: number) => {
 
   // Draw Performance Indicators (top-right corner)
   ctx.save();
-  ctx.font = '14px monospace';
+  ctx.font = '12px monospace';
   ctx.textAlign = 'right';
   
   const fpsText = `FPS: ${currentFPS}`;
   const bodyCountText = `Bodies: ${simulationStore.bodies.length}`;
   const zoomText = `Zoom: ${cameraStore.zoom.toFixed(2)}x`;
-  const trailText = `Trail Length: ${targetTrailLength.value}`;
+  const trailText = `Trail Length: ${simulationStore.trailLength}`;
   
   // Measure text width for background
   const maxWidth = Math.max(
@@ -610,32 +583,27 @@ const render = (timestamp: number) => {
   );
   
   const rightMargin = canvas.value.width - 10;
-  const topMargin = 60;
+  // Use different top margin for mobile vs desktop
+  const topMargin = isTouchDevice.value ? 5 : 60;
   
   // Background for readability
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
   ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 90);
   
-  // FPS text with color coding
-  if (currentFPS >= 50) {
-    ctx.fillStyle = '#4CAF50'; // Green - good
-  } else if (currentFPS >= 30) {
-    ctx.fillStyle = '#FFC107'; // Yellow - okay
-  } else {
-    ctx.fillStyle = '#F44336'; // Red - bad
-  }
+  // FPS
+  ctx.fillStyle = '#AA0000';
   ctx.fillText(fpsText, rightMargin - 10, topMargin + 20);
   
   // Body count
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = '#AA0000';
   ctx.fillText(bodyCountText, rightMargin - 10, topMargin + 40);
   
   // Zoom level
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = '#AA0000';
   ctx.fillText(zoomText, rightMargin - 10, topMargin + 60);
   
   // Trail length
-  ctx.fillStyle = '#FFFFFF';
+  ctx.fillStyle = '#AA0000';
   ctx.fillText(trailText, rightMargin - 10, topMargin + 80);
   
   ctx.restore();
@@ -724,7 +692,6 @@ const onMouseDown = (e: MouseEvent) => {
 let slingshotStartPos: Vector2 | null = null;
 let slingshotLockedBodyId: string | null = null; // Track if slingshot was started while locked to a body
 const isSlingshotting = ref(false);
-const isMultipleMode = ref(false); // Toggle for multiple body spawning
 let isShiftPressed = false;
 let lastShiftSpawnTime = 0;
 const SHIFT_SPAWN_INTERVAL = 100; // 10 bodies per second (1000ms / 10 = 100ms)
@@ -827,7 +794,6 @@ const onMouseUp = (e: MouseEvent) => {
     simulationStore.creationSettings.isStatic = false;
 
     isSlingshotting.value = false;
-    isMultipleMode.value = false;
     slingshotStartPos = null;
     slingshotLockedBodyId = null;
     ghostPath.value = [];
@@ -869,11 +835,6 @@ const onWheel = (e: WheelEvent) => {
   if (!cameraStore.lockedBodyId) {
     cameraStore.offset = cameraStore.offset.add(offsetAdjustment);
   }
-};
-
-const toggleMultipleMode = (e: Event) => {
-  e.preventDefault();
-  isMultipleMode.value = !isMultipleMode.value;
 };
 
 const onKeyDown = (e: KeyboardEvent) => {
@@ -1016,7 +977,6 @@ const onTouchEnd = (e: TouchEvent) => {
     }
     isDragging = false;
     initialPinchDistance = null;
-    isMultipleMode.value = false;
   } else if (e.touches.length === 1) {
     // One finger left - reset pinch
     initialPinchDistance = null;
@@ -1098,34 +1058,6 @@ canvas {
   pointer-events: auto;
 }
 
-.multiple-button {
-  background: rgba(30, 30, 30, 0.95);
-  color: #fff;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 1rem;
-  font-weight: 600;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.multiple-button:hover {
-  background: rgba(50, 50, 50, 0.95);
-  border-color: rgba(255, 255, 255, 0.5);
-  transform: scale(1.05);
-}
-
-.multiple-button.active {
-  background: rgba(33, 150, 243, 0.9);
-  border-color: #2196F3;
-  color: #fff;
-  box-shadow: 0 4px 16px rgba(33, 150, 243, 0.5);
-}
-
 .slingshot-tooltip {
   position: absolute;
   background: rgba(30, 30, 30, 0.95);
@@ -1150,16 +1082,9 @@ canvas {
   color: #82B1FF;
 }
 
-/* Hide tooltip on mobile, show Multiple button */
+/* Hide tooltip on mobile */
 @media (max-width: 768px), (hover: none) {
   .slingshot-tooltip {
-    display: none;
-  }
-}
-
-/* Hide Multiple button on desktop, show tooltip */
-@media (min-width: 769px) and (hover: hover) {
-  .multiple-button-container {
     display: none;
   }
 }
