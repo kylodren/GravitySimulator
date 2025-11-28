@@ -1,7 +1,15 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import App from '../App.vue'
 
 const routes: RouteRecordRaw[] = [
-    // We will add routes here later
+    {
+        path: '/',
+        component: App
+    },
+    {
+        path: '/:pathMatch(.*)*',
+        redirect: '/'
+    }
 ]
 
 const router = createRouter({

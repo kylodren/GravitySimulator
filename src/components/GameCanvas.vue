@@ -31,7 +31,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useSimulationStore } from '../stores/simulation';
 import { useCameraStore } from '../stores/camera';
 import { Vector2 } from '../core/Vector2';
@@ -50,7 +50,12 @@ let fpsLastTime = 0;
 let currentFPS = 60;
 
 // Slingshot configuration
-const SLINGSHOT_VELOCITY = 2.0; // Velocity multiplier for slingshot launches
+const SLINGSHOT_VELOCITY_DESKTOP = 2.0; // Velocity multiplier for desktop
+const SLINGSHOT_VELOCITY_MOBILE = 4.0; // Velocity multiplier for mobile (2x stronger)
+
+// Detect if we're on a touch device
+const isTouchDevice = ref('ontouchstart' in window || navigator.maxTouchPoints > 0);
+const SLINGSHOT_VELOCITY = computed(() => isTouchDevice.value ? SLINGSHOT_VELOCITY_MOBILE : SLINGSHOT_VELOCITY_DESKTOP);
 
 // Input handling state
 let isDragging = false;
@@ -187,7 +192,7 @@ const render = (timestamp: number) => {
       
       const endPos = screenToWorld(currentMouseScreenPos);
       const pullVector = actualStartPos.sub(endPos);
-      const baseVelocity = pullVector.mult(SLINGSHOT_VELOCITY);
+      const baseVelocity = pullVector.mult(SLINGSHOT_VELOCITY.value);
       
       // Add small randomness to velocity (±5% in magnitude, ±2 degrees in direction)
       const magnitudeVariation = 1 + (Math.random() - 0.5) * 0.1; // ±5%
@@ -379,11 +384,13 @@ const render = (timestamp: number) => {
   
   const fpsText = `FPS: ${currentFPS}`;
   const bodyCountText = `Bodies: ${simulationStore.bodies.length}`;
+  const zoomText = `Zoom: ${cameraStore.zoom.toFixed(2)}x`;
   
   // Measure text width for background
   const maxWidth = Math.max(
     ctx.measureText(fpsText).width,
-    ctx.measureText(bodyCountText).width
+    ctx.measureText(bodyCountText).width,
+    ctx.measureText(zoomText).width
   );
   
   const rightMargin = canvas.value.width - 10;
@@ -391,7 +398,7 @@ const render = (timestamp: number) => {
   
   // Background for readability
   ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 50);
+  ctx.fillRect(rightMargin - maxWidth - 20, topMargin, maxWidth + 20, 70);
   
   // FPS text with color coding
   if (currentFPS >= 50) {
@@ -406,6 +413,10 @@ const render = (timestamp: number) => {
   // Body count
   ctx.fillStyle = '#FFFFFF';
   ctx.fillText(bodyCountText, rightMargin - 10, topMargin + 40);
+  
+  // Zoom level
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(zoomText, rightMargin - 10, topMargin + 60);
   
   ctx.restore();
 
@@ -546,13 +557,14 @@ const onMouseMove = (e: MouseEvent) => {
     
     const endPos = screenToWorld(currentMousePos);
     const pullVector = actualStartPos.sub(endPos);
-    const velocity = pullVector.mult(SLINGSHOT_VELOCITY);
+    const velocity = pullVector.mult(SLINGSHOT_VELOCITY.value);
 
     ghostPath.value = simulationStore.predictPath(
         actualStartPos, 
         velocity, 
         simulationStore.creationSettings.mass,
-        1500
+        30000,
+        0.01  // 10x higher resolution (0.1 / 10)
     );
   }
 };
@@ -576,24 +588,7 @@ const onMouseUp = (e: MouseEvent) => {
     
     const endPos = screenToWorld(new Vector2(e.clientX, e.clientY));
     const pullVector = actualStartPos.sub(endPos);
-    const velocity = pullVector.mult(SLINGSHOT_VELOCITY);
-
-    // Debug logging for manual launch
-    console.log('=== Manual Launch Debug Info ===');
-    console.log('Body Position:', { x: actualStartPos.x, y: actualStartPos.y });
-    console.log('Velocity:', { x: velocity.x, y: velocity.y });
-    console.log('Velocity Magnitude:', velocity.mag());
-    console.log('Body Mass:', simulationStore.creationSettings.mass);
-    console.log('Body Radius:', simulationStore.creationSettings.radius);
-    
-    // Check distance from any static bodies (suns)
-    const staticBodies = simulationStore.bodies.filter(b => b.isStatic);
-    staticBodies.forEach(sun => {
-      const distance = actualStartPos.dist(sun.position);
-      console.log(`Distance from Sun at (${sun.position.x}, ${sun.position.y}):`, distance);
-      console.log('Sun Mass:', sun.mass);
-      console.log('Expected circular orbit speed at this distance:', Math.sqrt(1000000.0 * sun.mass / distance));
-    });
+    const velocity = pullVector.mult(SLINGSHOT_VELOCITY.value);
 
     simulationStore.addBody({
       id: crypto.randomUUID(),
@@ -630,7 +625,7 @@ const onWheel = (e: WheelEvent) => {
   // Calculate new zoom
   const zoomSpeed = 0.1;
   const oldZoom = cameraStore.zoom;
-  const newZoom = Math.max(0.01, Math.min(oldZoom - Math.sign(e.deltaY) * zoomSpeed * oldZoom, 100.0));
+  const newZoom = Math.max(0.01, Math.min(oldZoom - Math.sign(e.deltaY) * zoomSpeed * oldZoom, 10.0));
   
   // To keep the world point under the cursor fixed:
   // We need to adjust the offset so that the same world point stays under the mouse
@@ -753,7 +748,7 @@ const onTouchMove = (e: TouchEvent) => {
       // Handle pinch zoom
       if (initialPinchDistance !== null) {
         const zoomFactor = currentDistance / initialPinchDistance;
-        const newZoom = Math.max(0.01, Math.min(initialZoom * zoomFactor, 100.0));
+        const newZoom = Math.max(0.01, Math.min(initialZoom * zoomFactor, 10.0));
         
         // Zoom towards the center of the pinch
         const canvasCenter = new Vector2(canvas.value.width / 2, canvas.value.height / 2);
