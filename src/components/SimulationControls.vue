@@ -7,7 +7,7 @@
         
         <!-- Left: Title and Simulation Controls -->
         <div class="controls-section controls-left">
-          <h1 class="app-title">Orbits</h1>
+          <h1 class="app-title" @click="resetAndReload" style="cursor: pointer;">Orbits</h1>
           <v-divider vertical class="divider-desktop"></v-divider>
           <div class="d-flex align-center flex-wrap" style="gap: 6px;">
           <v-tooltip location="bottom">
@@ -169,6 +169,11 @@ const selectMassType = (type: 'asteroid' | 'planet' | 'sun' | 'blackhole') => {
 
 const updateTimeScale = (value: string) => {
   simulationStore.timeScale = parseFloat(value);
+};
+
+const resetAndReload = () => {
+  sessionStorage.clear();
+  window.location.reload();
 };
 
 const speedOptions = ['0.25', '0.5', '1.0', '1.5', '2.0', '3.0'];

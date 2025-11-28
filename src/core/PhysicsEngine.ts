@@ -112,7 +112,7 @@ export class PhysicsEngine {
     }
 
     // Simulate a trajectory for a body without affecting the actual simulation
-    predictTrajectory(bodies: Body[], subject: Body, steps: number, dt: number): Vector2[] {
+    predictTrajectory(bodies: Body[], subject: Body, steps: number, dt: number, allowSameTypeInteraction: boolean = true): Vector2[] {
         const path: Vector2[] = [];
 
         // Clone bodies to avoid modifying actual state - treat as static gravitational field
@@ -127,6 +127,11 @@ export class PhysicsEngine {
             let acceleration = new Vector2(0, 0);
 
             for (const body of simBodies) {
+                // Skip interaction if same-type interaction is disabled and bodies have same mass
+                if (!allowSameTypeInteraction && body.mass === simSubject.mass) {
+                    continue;
+                }
+                
                 const direction = body.position.sub(simSubject.position);
                 const distance = direction.mag();
                 const forceMagnitude = (this.G * body.mass) / (Math.pow(distance, 2) + Math.pow(this.softening, 2));

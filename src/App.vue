@@ -4,7 +4,7 @@
       <GameCanvas />
       <SimulationControls />
       <IntroTour 
-        v-if="simulationStore.showIntroTour" 
+        v-if="shouldShowTour && simulationStore.showIntroTour" 
         @tour-complete="simulationStore.completeTour()"
       />
     </v-main>
@@ -12,12 +12,25 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue';
 import GameCanvas from './components/GameCanvas.vue';
 import SimulationControls from './components/SimulationControls.vue';
 import IntroTour from './components/IntroTour.vue';
 import { useSimulationStore } from './stores/simulation';
 
+const TOUR_NEVER_SHOW_KEY = 'orbits_tour_never_show';
+
 const simulationStore = useSimulationStore();
+const shouldShowTour = ref(true);
+
+onMounted(() => {
+  // Check if user has opted to never show tour again
+  const neverShow = sessionStorage.getItem(TOUR_NEVER_SHOW_KEY) === 'true';
+  if (neverShow) {
+    shouldShowTour.value = false;
+    simulationStore.completeTour();
+  }
+});
 </script>
 
 <style>

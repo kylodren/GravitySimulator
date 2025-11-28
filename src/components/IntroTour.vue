@@ -50,6 +50,15 @@
         >
           {{ isLastStep ? 'Finish Tour' : 'Next' }}
         </v-btn>
+        <v-btn
+          v-if="currentStep === 0 && hasCompletedBefore"
+          @click="skipTour"
+          color="grey"
+          variant="text"
+          size="small"
+        >
+          Skip
+        </v-btn>
       </div>
       <!-- Arrow pointer -->
       <div class="callout-arrow" :class="arrowPosition"></div>
@@ -63,10 +72,14 @@ import { useSimulationStore } from '../stores/simulation';
 import { useCameraStore } from '../stores/camera';
 import { Vector2 } from '../core/Vector2';
 
+const TOUR_COMPLETED_KEY = 'orbits_tour_completed';
+const TOUR_NEVER_SHOW_KEY = 'orbits_tour_never_show';
+
 const simulationStore = useSimulationStore();
 const cameraStore = useCameraStore();
 const currentStep = ref(0);
 const isActive = ref(true);
+const hasCompletedBefore = ref(false);
 
 const steps = [
   {
@@ -357,10 +370,18 @@ const nextStep = async () => {
       
     case 4:
       // Step 5: Finish tour
+      sessionStorage.setItem(TOUR_COMPLETED_KEY, 'true');
       isActive.value = false;
       emit('tour-complete');
       break;
   }
+};
+
+const skipTour = () => {
+  // Set never show flag and complete tour
+  sessionStorage.setItem(TOUR_NEVER_SHOW_KEY, 'true');
+  isActive.value = false;
+  emit('tour-complete');
 };
 
 const emit = defineEmits(['tour-complete']);
@@ -368,6 +389,9 @@ const emit = defineEmits(['tour-complete']);
 onMounted(() => {
   updateCalloutPosition();
   window.addEventListener('resize', updateCalloutPosition);
+  
+  // Check if tour has been completed before
+  hasCompletedBefore.value = sessionStorage.getItem(TOUR_COMPLETED_KEY) === 'true';
 });
 
 onUnmounted(() => {

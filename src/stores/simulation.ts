@@ -73,7 +73,7 @@ export const useSimulationStore = defineStore('simulation', () => {
             radius: 1,
             color: '#fff'
         };
-        return physicsEngine.predictTrajectory(bodies.value, tempBody, steps, dt * timeScale.value);
+        return physicsEngine.predictTrajectory(bodies.value, tempBody, steps, dt * timeScale.value, allowSameTypeInteraction.value);
     }
 
     function completeTour() {

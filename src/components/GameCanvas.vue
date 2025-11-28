@@ -4,7 +4,7 @@
     <div class="overlay-ui">
       <!-- We'll add UI controls here later or in a separate component -->
     </div>
-    <!-- Multiple Bodies Button (appears during slingshot) -->
+    <!-- Multiple Bodies Button (mobile only) -->
     <div 
       v-if="isSlingshotting && slingshotStartPos"
       class="multiple-button-container"
@@ -17,6 +17,15 @@
       >
         Multiple
       </button>
+    </div>
+    
+    <!-- Shift tooltip (desktop only) -->
+    <div 
+      v-if="isSlingshotting && slingshotStartPos"
+      class="slingshot-tooltip"
+      :style="{ left: currentMouseScreenPos.x + 20 + 'px', top: currentMouseScreenPos.y - 10 + 'px' }"
+    >
+      Hold <span class="key">Shift</span> for Multiple
     </div>
   </div>
 </template>
@@ -896,5 +905,43 @@ canvas {
   border-color: #2196F3;
   color: #fff;
   box-shadow: 0 4px 16px rgba(33, 150, 243, 0.5);
+}
+
+.slingshot-tooltip {
+  position: absolute;
+  background: rgba(30, 30, 30, 0.95);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 1000;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.slingshot-tooltip .key {
+  background: rgba(255, 255, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+  font-weight: bold;
+  color: #82B1FF;
+}
+
+/* Hide tooltip on mobile, show Multiple button */
+@media (max-width: 768px), (hover: none) {
+  .slingshot-tooltip {
+    display: none;
+  }
+}
+
+/* Hide Multiple button on desktop, show tooltip */
+@media (min-width: 769px) and (hover: hover) {
+  .multiple-button-container {
+    display: none;
+  }
 }
 </style>
