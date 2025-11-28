@@ -367,43 +367,46 @@ const render = (timestamp: number) => {
             }
           };
           
-          // Draw trail with or without visual effects based on setting
-          if (simulationStore.enableEffects) {
-            // Draw glow layers (outer to inner) - increased widths and opacity
+          // Draw trail with visual effects based on setting (0=off, 1=normal, 2=extreme)
+          if (simulationStore.enableEffects === 0) {
+            // Simple rendering: solid color without gradients or glow
+            drawPath();
+            ctx.strokeStyle = `hsla(${hue1}, ${saturation}%, 60%, ${fadeAlpha})`;
+            ctx.lineWidth = baseWidth;
+            ctx.lineCap = 'butt';
+            ctx.stroke();
+          } else {
+            // Calculate width multiplier based on effect level
+            const widthMultiplier = simulationStore.enableEffects === 2 ? 2 : 1;
+            
+            // Draw glow layers (outer to inner)
             // Outer glow (widest)
             drawPath();
             const gradient1 = ctx.createLinearGradient(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y);
-            gradient1.addColorStop(0, `hsla(${hue1}, ${saturation}%, 50%, ${0.25 * fadeAlpha})`);
-            gradient1.addColorStop(1, `hsla(${hue2}, ${saturation}%, 50%, ${0.25 * fadeAlpha})`);
+            gradient1.addColorStop(0, `hsla(${hue1}, ${saturation}%, 50%, ${0.6 * fadeAlpha})`);
+            gradient1.addColorStop(1, `hsla(${hue2}, ${saturation}%, 50%, ${0.6 * fadeAlpha})`);
             ctx.strokeStyle = gradient1;
-            ctx.lineWidth = baseWidth * 5;
+            ctx.lineWidth = baseWidth * 7 ;
             ctx.lineCap = 'butt';
             ctx.stroke();
             
             // Middle glow
             drawPath();
             const gradient2 = ctx.createLinearGradient(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y);
-            gradient2.addColorStop(0, `hsla(${hue1}, ${saturation}%, 50%, ${0.5 * fadeAlpha})`);
-            gradient2.addColorStop(1, `hsla(${hue2}, ${saturation}%, 50%, ${0.5 * fadeAlpha})`);
+            gradient2.addColorStop(0, `hsla(${hue1}, ${saturation}%, 60%, ${0.8 * fadeAlpha})`);
+            gradient2.addColorStop(1, `hsla(${hue2}, ${saturation}%, 60%, ${0.8 * fadeAlpha})`);
             ctx.strokeStyle = gradient2;
-            ctx.lineWidth = baseWidth * 2.5;
+            ctx.lineWidth = baseWidth * 3 * widthMultiplier;
             ctx.lineCap = 'butt';
             ctx.stroke();
             
             // Core/bright center
             drawPath();
             const gradient3 = ctx.createLinearGradient(screenStart.x, screenStart.y, screenEnd.x, screenEnd.y);
-            gradient3.addColorStop(0, `hsla(${hue1}, ${saturation}%, 70%, ${1.0 * fadeAlpha})`);
-            gradient3.addColorStop(1, `hsla(${hue2}, ${saturation}%, 70%, ${1.0 * fadeAlpha})`);
+            gradient3.addColorStop(0, `hsla(${hue1}, ${saturation}%, 80%, ${1.0 * fadeAlpha})`);
+            gradient3.addColorStop(1, `hsla(${hue2}, ${saturation}%, 80%, ${1.0 * fadeAlpha})`);
             ctx.strokeStyle = gradient3;
-            ctx.lineWidth = baseWidth * 1.2;
-            ctx.lineCap = 'butt';
-            ctx.stroke();
-          } else {
-            // Simple rendering: solid color without gradients or glow
-            drawPath();
-            ctx.strokeStyle = `hsla(${hue1}, ${saturation}%, 60%, ${fadeAlpha})`;
-            ctx.lineWidth = baseWidth;
+            ctx.lineWidth = baseWidth * 1.2 * widthMultiplier;
             ctx.lineCap = 'butt';
             ctx.stroke();
           }
@@ -449,6 +452,7 @@ const render = (timestamp: number) => {
         const tailLength = baseTailLength * (1 + Math.min(500, minDist) / 500);
         
         // Draw multiple tail streaks with glow effect
+        const widthMultiplier = simulationStore.enableEffects === 2 ? 2 : 1;
         const numStreaks = 3;
         for (let i = 0; i < numStreaks; i++) {
           const spreadAngle = (Math.random() - 0.5) * 0.3; // Random spread
@@ -467,7 +471,7 @@ const render = (timestamp: number) => {
           ctx.moveTo(screenPos.x, screenPos.y);
           ctx.lineTo(tailEndScreen.x, tailEndScreen.y);
           ctx.strokeStyle = `rgba(135, 206, 235, ${0.1 - i * 0.05})`;
-          ctx.lineWidth = Math.max(3, (2 - i * 3) * cameraStore.zoom);
+          ctx.lineWidth = Math.max(3, (2 - i * 3) * cameraStore.zoom * widthMultiplier);
           ctx.lineCap = 'round';
           ctx.stroke();
           
@@ -476,7 +480,7 @@ const render = (timestamp: number) => {
           ctx.moveTo(screenPos.x, screenPos.y);
           ctx.lineTo(tailEndScreen.x, tailEndScreen.y);
           ctx.strokeStyle = `rgba(173, 216, 230, ${0.2 - i * 0.08})`;
-          ctx.lineWidth = Math.max(2, (5 - i * 2) * cameraStore.zoom);
+          ctx.lineWidth = Math.max(2, (5 - i * 2) * cameraStore.zoom * widthMultiplier);
           ctx.lineCap = 'round';
           ctx.stroke();
           
@@ -485,7 +489,7 @@ const render = (timestamp: number) => {
           ctx.moveTo(screenPos.x, screenPos.y);
           ctx.lineTo(tailEndScreen.x, tailEndScreen.y);
           ctx.strokeStyle = `rgba(224, 247, 250, ${0.1 - i * 0.15})`;
-          ctx.lineWidth = Math.max(1.5, (4 - i * 0.8) * cameraStore.zoom);
+          ctx.lineWidth = Math.max(1.5, (4 - i * 0.8) * cameraStore.zoom * widthMultiplier);
           ctx.lineCap = 'round';
           ctx.stroke();
         }

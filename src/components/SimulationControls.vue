@@ -67,13 +67,13 @@
               <v-btn
                 v-bind="props"
                 icon="mdi-shimmer"
-                @click="simulationStore.enableEffects = !simulationStore.enableEffects"
-                :color="simulationStore.enableEffects ? 'primary' : 'default'"
+                @click="cycleEffects"
+                :color="simulationStore.enableEffects === 0 ? 'default' : simulationStore.enableEffects === 1 ? 'primary' : 'accent'"
                 size="small"
                 variant="tonal"
               ></v-btn>
             </template>
-            <span>Visual Effects: {{ simulationStore.enableEffects ? 'On' : 'Off' }} (G)</span>
+            <span>Visual Effects: {{ simulationStore.enableEffects === 0 ? 'Off' : simulationStore.enableEffects === 1 ? 'Normal' : 'Extreme' }} (G)</span>
           </v-tooltip>
           </div>
         </div>
@@ -272,6 +272,10 @@ const decreaseTrailLength = () => {
   simulationStore.trailLength = Math.max(0, simulationStore.trailLength - 10);
 };
 
+const cycleEffects = () => {
+  simulationStore.enableEffects = (simulationStore.enableEffects + 1) % 3;
+};
+
 const toggleAutoTrails = () => {
   simulationStore.autoTrails = !simulationStore.autoTrails;
 };
@@ -304,7 +308,7 @@ const handleKeyDown = (e: KeyboardEvent) => {
       break;
     case 'g':
       e.preventDefault();
-      simulationStore.enableEffects = !simulationStore.enableEffects;
+      cycleEffects();
       break;
   }
 };

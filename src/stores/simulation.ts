@@ -27,7 +27,7 @@ export const useSimulationStore = defineStore('simulation', () => {
     });
 
     const showTrails = ref(true); // Toggle for showing trails
-    const enableEffects = ref(true); // Toggle for trail visual effects (glow, gradients, multi-layer rendering)
+    const enableEffects = ref(1); // Trail visual effects: 0=off, 1=normal glow, 2=extreme glow
     const allowSameTypeInteraction = ref(false); // If false, same body types don't interact
     const showIntroTour = ref(true); // Control intro tour visibility
     const trailLength = ref(150); // Trail length control
