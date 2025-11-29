@@ -6,6 +6,15 @@ export interface TrailPoint {
     relativeSpeed?: number; // Relative speed 0-1 for color-coded trail rendering
 }
 
+export interface Particle {
+    position: Vector2;
+    velocity: Vector2;
+    life: number; // 0 to 1, decreases over time
+    maxLife: number; // Initial life duration
+    size: number;
+    color: string;
+}
+
 export interface Body {
     id: string;
     position: Vector2;

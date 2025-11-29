@@ -84,6 +84,10 @@ export const useSimulationStore = defineStore('simulation', () => {
         showIntroTour.value = false;
     }
 
+    function checkCollisions() {
+        return physicsEngine.checkCollisions(bodies.value);
+    }
+
     return {
         bodies,
         isPaused,
@@ -102,6 +106,7 @@ export const useSimulationStore = defineStore('simulation', () => {
         removeBody,
         predictPath,
         toggleTrails,
-        completeTour
+        completeTour,
+        checkCollisions
     };
 });

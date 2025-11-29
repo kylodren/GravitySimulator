@@ -15,7 +15,7 @@
               <v-btn
                 v-bind="props"
                 icon="mdi-cancel"
-                @click="simulationStore.reset()"
+                @click="handleClear"
                 color="error"
                 size="small"
                 variant="tonal"
@@ -224,11 +224,18 @@ const selectMassType = (type: 'asteroid' | 'comet' | 'planet' | 'sun') => {
   simulationStore.creationSettings.radius = preset.radius;
   simulationStore.creationSettings.color = preset.color;
   simulationStore.creationSettings.bodyType = type;
-  // Don't touch isStatic - let user control it
+  simulationStore.creationSettings.isStatic = false;
 };
 
 const updateTimeScale = (value: string) => {
   simulationStore.timeScale = parseFloat(value);
+};
+
+const handleClear = () => {
+  simulationStore.reset();
+  // Select sun and set fixed to true
+  selectMassType('sun');
+  simulationStore.creationSettings.isStatic = true;
 };
 
 const resetAndReload = () => {

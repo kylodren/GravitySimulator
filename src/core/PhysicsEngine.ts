@@ -141,4 +141,40 @@ export class PhysicsEngine {
 
         return path;
     }
+
+    // Check for collisions between bodies and return collision events
+    checkCollisions(bodies: Body[]): Array<{ bodyA: Body; bodyB: Body; point: Vector2 }> {
+        const collisions: Array<{ bodyA: Body; bodyB: Body; point: Vector2 }> = [];
+        
+        for (let i = 0; i < bodies.length; i++) {
+            for (let j = i + 1; j < bodies.length; j++) {
+                const bodyA = bodies[i];
+                const bodyB = bodies[j];
+                
+                if (!bodyA || !bodyB) continue;
+                
+                const direction = bodyB.position.sub(bodyA.position);
+                const distance = direction.mag();
+                const minDistance = bodyA.radius + bodyB.radius;
+                
+                // Collision detected
+                if (distance < minDistance) {
+                    // Calculate collision point (weighted by mass)
+                    const totalMass = bodyA.mass + bodyB.mass;
+                    const collisionPoint = new Vector2(
+                        (bodyA.position.x * bodyB.mass + bodyB.position.x * bodyA.mass) / totalMass,
+                        (bodyA.position.y * bodyB.mass + bodyB.position.y * bodyA.mass) / totalMass
+                    );
+                    
+                    collisions.push({
+                        bodyA,
+                        bodyB,
+                        point: collisionPoint
+                    });
+                }
+            }
+        }
+        
+        return collisions;
+    }
 }

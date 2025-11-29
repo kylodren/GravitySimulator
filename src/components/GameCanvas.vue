@@ -30,6 +30,17 @@ const cameraStore = useCameraStore();
 let animationFrameId: number;
 let lastTime = 0;
 
+// Particle system for collision sparkles
+interface Particle {
+  position: Vector2;
+  velocity: Vector2;
+  life: number;
+  maxLife: number;
+  size: number;
+  color: string;
+}
+const particles = ref<Particle[]>([]);
+
 // FPS tracking
 let fpsFrames = 0;
 let fpsLastTime = 0;
@@ -101,6 +112,48 @@ const screenToWorld = (screenPos: Vector2): Vector2 => {
   return screenPos.sub(center).div(cameraStore.zoom).add(camOffset);
 };
 
+// Particle system functions
+const spawnCollisionSparkles = (point: Vector2, _bodyA: any, _bodyB: any) => {
+  const particleCount = 20 + Math.floor(Math.random() * 20); // 20-40 particles
+  
+  for (let i = 0; i < particleCount; i++) {
+    const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.5;
+    const speed = 100 + Math.random() * 200; // Faster sparks: 100-300
+    const velocity = new Vector2(
+      Math.cos(angle) * speed,
+      Math.sin(angle) * speed
+    );
+    
+    // All particles are bright white
+    const color = '#FFFFFF';
+    
+    particles.value.push({
+      position: point.clone(),
+      velocity,
+      life: 1.0,
+      maxLife: 0.3 + Math.random() * 0.4, // 0.3-0.7 second lifetime (shorter)
+      size: 1 + Math.random() * 2, // 1-3 pixels (smaller, more spark-like)
+      color
+    });
+  }
+};
+
+const updateParticles = (dt: number) => {
+  particles.value = particles.value.filter(p => {
+    // Update position
+    p.position = p.position.add(p.velocity.mult(dt));
+    
+    // Apply friction/drag
+    p.velocity = p.velocity.mult(0.98);
+    
+    // Decrease life
+    p.life -= dt / p.maxLife;
+    
+    // Remove dead particles
+    return p.life > 0;
+  });
+};
+
 const render = (timestamp: number) => {
   if (!canvas.value) return;
   const ctx = canvas.value.getContext('2d');
@@ -143,6 +196,17 @@ const render = (timestamp: number) => {
 
   // Update Physics
   simulationStore.update(dt);
+  
+  // Check for collisions and spawn sparkle particles (only if 5 or fewer bodies)
+  if (simulationStore.bodies.length <= 5) {
+    const collisions = simulationStore.checkCollisions();
+    for (const collision of collisions) {
+      spawnCollisionSparkles(collision.point, collision.bodyA, collision.bodyB);
+    }
+  }
+  
+  // Update particles
+  updateParticles(dt);
   
   // Trim all trails to match current target length (always, not just auto mode)
   for (const body of simulationStore.bodies) {
@@ -536,6 +600,29 @@ const render = (timestamp: number) => {
         ctx.lineWidth = 2;
         ctx.stroke();
     }
+  }
+
+  // Draw Particles (collision sparkles)
+  for (const particle of particles.value) {
+    const screenPos = worldToScreen(particle.position);
+    const alpha = particle.life; // Fade out as life decreases
+    
+    // Draw sharp white spark
+    ctx.save();
+    
+    // Small subtle glow
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, particle.size * 1.5, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.3})`;
+    ctx.fill();
+    
+    // Bright sharp core
+    ctx.beginPath();
+    ctx.arc(screenPos.x, screenPos.y, particle.size, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+    ctx.fill();
+    
+    ctx.restore();
   }
 
   // Draw Slingshot Line
