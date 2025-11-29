@@ -422,10 +422,12 @@ const nextStep = async () => {
       // Move to final step
       currentStep.value++;
       updateCalloutPosition();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      calloutReady.value = true;
       break;
       
     case 4:
-      // Step 5: Finish tour
+      // Step 5: Finish tour (asteroid is already the default, no need to restore)
       sessionStorage.setItem(TOUR_COMPLETED_KEY, 'true');
       isActive.value = false;
       emit('tour-complete');
@@ -437,12 +439,27 @@ const skipTour = () => {
   // Set never show flag and complete tour
   sessionStorage.setItem(TOUR_NEVER_SHOW_KEY, 'true');
   isActive.value = false;
+  
+  // Select asteroid when skipping
+  setTimeout(() => {
+    const asteroidIcon = document.querySelector('[data-body-type="asteroid"]');
+    if (asteroidIcon instanceof HTMLElement) {
+      asteroidIcon.click();
+    }
+  }, 100);
+  
   emit('tour-complete');
 };
 
 const emit = defineEmits(['tour-complete']);
 
 onMounted(() => {
+  // Check if user has opted to never show tour - if so, don't override asteroid selection
+  const neverShow = sessionStorage.getItem(TOUR_NEVER_SHOW_KEY) === 'true';
+  if (neverShow) {
+    return;
+  }
+  
   // Delay to ensure DOM is fully rendered
   setTimeout(() => {
     // Select sun at the start of the tour

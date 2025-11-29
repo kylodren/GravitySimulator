@@ -14,20 +14,7 @@
             <template v-slot:activator="{ props }">
               <v-btn
                 v-bind="props"
-                :icon="simulationStore.isPaused ? 'mdi-play' : 'mdi-pause'"
-                @click="simulationStore.isPaused = !simulationStore.isPaused"
-                :color="simulationStore.isPaused ? 'success' : 'warning'"
-                size="small"
-                variant="tonal"
-              ></v-btn>
-            </template>
-            <span>{{ simulationStore.isPaused ? 'Play' : 'Pause' }} (Space)</span>
-          </v-tooltip>
-          <v-tooltip location="bottom">
-            <template v-slot:activator="{ props }">
-              <v-btn
-                v-bind="props"
-                icon="mdi-delete-sweep"
+                icon="mdi-cancel"
                 @click="simulationStore.reset()"
                 color="error"
                 size="small"
@@ -40,7 +27,7 @@
             <template v-slot:activator="{ props }">
               <v-btn
                 v-bind="props"
-                :icon="simulationStore.showTrails ? 'mdi-chart-line-variant' : 'mdi-chart-line-variant'"
+                icon="mdi-star-shooting"
                 @click="simulationStore.toggleTrails()"
                 :color="simulationStore.showTrails ? 'primary' : 'default'"
                 size="small"
@@ -60,7 +47,7 @@
                 variant="tonal"
               ></v-btn>
             </template>
-            <span>Same-Type Interaction: {{ simulationStore.allowSameTypeInteraction ? 'On' : 'Off' }}</span>
+            <span>Same-Body Interaction: {{ simulationStore.allowSameTypeInteraction ? 'On' : 'Off' }}</span>
           </v-tooltip>
           <v-tooltip location="bottom">
             <template v-slot:activator="{ props }">
@@ -299,10 +286,6 @@ const handleKeyDown = (e: KeyboardEvent) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
   
   switch(e.key.toLowerCase()) {
-    case ' ':
-      e.preventDefault();
-      simulationStore.isPaused = !simulationStore.isPaused;
-      break;
     case 't':
       e.preventDefault();
       simulationStore.toggleTrails();
