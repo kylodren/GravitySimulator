@@ -19,11 +19,11 @@ export const useSimulationStore = defineStore('simulation', () => {
     };
 
     const creationSettings = ref({
-        mass: 10,
-        radius: 8,
-        color: '#2196F3',
-        isStatic: true,
-        bodyType: 'planet' as string
+        mass: 1,
+        radius: 3,
+        color: '#808080',
+        isStatic: false,
+        bodyType: 'asteroid' as string
     });
 
     const showTrails = ref(true); // Toggle for showing trails

@@ -37,6 +37,7 @@
     
     <!-- Callout Box -->
     <div 
+      v-if="calloutReady"
       class="tour-callout"
       :style="calloutPosition"
     >
@@ -60,8 +61,8 @@
           Skip
         </v-btn>
       </div>
-      <!-- Arrow pointer -->
-      <div class="callout-arrow" :class="arrowPosition"></div>
+      <!-- Arrow pointer (hidden for steps 3 and 4) -->
+      <div v-if="currentStep < 3" class="callout-arrow" :class="arrowPosition"></div>
     </div>
   </div>
 </template>
@@ -80,6 +81,7 @@ const cameraStore = useCameraStore();
 const currentStep = ref(0);
 const isActive = ref(true);
 const hasCompletedBefore = ref(false);
+const calloutReady = ref(false);
 
 const steps = [
   {
@@ -99,7 +101,9 @@ const steps = [
     arrowDir: 'top'
   },
   {
-    message: 'Click and drag at a tangent to launch (hold shift for multiple)',
+    message: 'Click and drag at a tangent to launch',
+    mobileMessage: 'Click and drag at a tangent to launch',
+    desktopMessage: 'Click and drag at a tangent to launch (hold shift for multiple)',
     targetSelector: '.canvas-container',
     arrowDir: 'left',
     rightSide: true,
@@ -114,7 +118,15 @@ const steps = [
   }
 ];
 
-const currentStepMessage = computed(() => steps[currentStep.value]?.message || '');
+const currentStepMessage = computed(() => {
+  const step = steps[currentStep.value];
+  if (!step) return '';
+  const isMobile = window.innerWidth <= 768;
+  if (step.mobileMessage && step.desktopMessage) {
+    return isMobile ? step.mobileMessage : step.desktopMessage;
+  }
+  return step.message || '';
+});
 const isLastStep = computed(() => currentStep.value === steps.length - 1);
 const arrowPosition = computed(() => steps[currentStep.value]?.arrowDir || 'top');
 
@@ -145,6 +157,8 @@ const calloutPosition = ref<Record<string, string>>({
 const updateCalloutPosition = () => {
   const step = steps[currentStep.value];
   if (!step) return;
+  
+  const isMobile = window.innerWidth <= 768;
 
   if (step.centerScreen) {
     // Position below the sun in center of screen
@@ -155,25 +169,52 @@ const updateCalloutPosition = () => {
       transform: 'translateX(-50%)'
     };
   } else if (step.rightSide) {
-    // Position on right side of screen
-    const rightValue = step.rightOffset || '25%';
+    // Position horizontally centered
     calloutPosition.value = {
-      top: '50%',
-      right: rightValue,
-      left: 'auto',
-      transform: 'translateY(-50%)'
+      top: '80%',
+      left: '50%',
+      right: 'auto',
+      transform: 'translate(-50%, -50%)'
     };
   } else {
     // Position relative to target element
     const target = document.querySelector(step.targetSelector);
     if (target) {
       const rect = target.getBoundingClientRect();
-      calloutPosition.value = {
-        top: `${rect.bottom + 20}px`,
-        left: `${rect.left + rect.width / 2}px`,
-        right: 'auto',
-        transform: 'translateX(-50%)'
-      };
+      
+      // On mobile, use fixed positioning below the control panel
+      if (isMobile) {
+        // Wait for control panel animation to complete (0.3s), then calculate position
+        setTimeout(() => {
+          const controlPanel = document.querySelector('.top-bar-container');
+          const panelHeight = controlPanel ? controlPanel.getBoundingClientRect().bottom : 200;
+          
+          // Special positioning for asteroid selection (step 2)
+          if (currentStep.value === 2) {
+            calloutPosition.value = {
+              top: `${panelHeight + -53}px`,
+              left: '32%',
+              right: 'auto',
+              transform: 'translateX(-50%)'
+            };
+          } else {
+            // Default positioning for sun selection (step 0)
+            calloutPosition.value = {
+              top: `${panelHeight + -53}px`,
+              left: '57%',
+              right: 'auto',
+              transform: 'translateX(-50%)'
+            };
+          }
+        }, 350); // Wait for animation + small buffer
+      } else {
+        calloutPosition.value = {
+          top: `${rect.bottom + 20}px`,
+          left: `${rect.left + rect.width / 2}px`,
+          right: 'auto',
+          transform: 'translateX(-50%)'
+        };
+      }
     }
   }
 };
@@ -259,27 +300,36 @@ const animateSlingshotGesture = async (startPos: Vector2, finalVelocity: Vector2
 const nextStep = async () => {
   const step = currentStep.value;
   
+  // Hide callout during transition
+  calloutReady.value = false;
+  await new Promise(resolve => setTimeout(resolve, 100));
+  
   // Execute step actions before moving to next
   switch (step) {
     case 0:
-      // Step 1 -> 2: Place sun at center
+      // Step 1 -> 2: Place sun at center (skip if already exists)
       currentStep.value++;
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Place sun in center (fixed)
-      simulationStore.creationSettings.isStatic = true;
-      const preset = simulationStore.massPresets.sun;
-      simulationStore.addBody({
-        id: crypto.randomUUID(),
-        position: new Vector2(0, 0),
-        velocity: new Vector2(0, 0),
-        mass: preset.mass,
-        radius: preset.radius,
-        color: preset.color,
-        isStatic: true,
-        bodyType: 'sun'
-      });
+      // Only place sun if one doesn't already exist
+      const hasSun = simulationStore.bodies.some(b => b.bodyType === 'sun');
+      if (!hasSun) {
+        simulationStore.creationSettings.isStatic = true;
+        const preset = simulationStore.massPresets.sun;
+        simulationStore.addBody({
+          id: crypto.randomUUID(),
+          position: new Vector2(0, 0),
+          velocity: new Vector2(0, 0),
+          mass: preset.mass,
+          radius: preset.radius,
+          color: preset.color,
+          isStatic: true,
+          bodyType: 'sun'
+        });
+      }
       updateCalloutPosition();
+      await new Promise(resolve => setTimeout(resolve, 400));
+      calloutReady.value = true;
       break;
       
     case 1:
@@ -302,12 +352,16 @@ const nextStep = async () => {
       }
       
       updateCalloutPosition();
+      await new Promise(resolve => setTimeout(resolve, 400));
+      calloutReady.value = true;
       break;
       
     case 2:
       // Step 3 -> 4: Show launch instruction
       currentStep.value++;
       updateCalloutPosition();
+      await new Promise(resolve => setTimeout(resolve, 100));
+      calloutReady.value = true;
       break;
       
     case 3:
@@ -319,11 +373,11 @@ const nextStep = async () => {
       if (sunBody) {
         const sunPos = sunBody.position;
         const distance = 200; // Nice orbital distance
-        const angle = Math.PI / 4; // 45 degrees
         
+        // Position directly below the sun (horizontally centered)
         const asteroidPos = new Vector2(
-          sunPos.x + Math.cos(angle) * distance,
-          sunPos.y + Math.sin(angle) * distance
+          sunPos.x,
+          sunPos.y + distance
         );
         
         // Calculate perfect circular orbit velocity
@@ -389,7 +443,22 @@ const skipTour = () => {
 const emit = defineEmits(['tour-complete']);
 
 onMounted(() => {
-  updateCalloutPosition();
+  // Delay to ensure DOM is fully rendered
+  setTimeout(() => {
+    // Select sun at the start of the tour
+    const sunIcon = document.querySelector('[data-body-type="sun"]');
+    if (sunIcon instanceof HTMLElement) {
+      sunIcon.click();
+    }
+    
+    updateCalloutPosition();
+    
+    // Show callout after positioning is complete (including inner setTimeout in updateCalloutPosition)
+    setTimeout(() => {
+      calloutReady.value = true;
+    }, 400); // Wait for updateCalloutPosition's inner setTimeout (350ms) to complete
+  }, 200);
+  
   window.addEventListener('resize', updateCalloutPosition);
   
   // Check if tour has been completed before
@@ -433,18 +502,6 @@ onUnmounted(() => {
   min-width: 280px;
   max-width: 400px;
   box-shadow: 0 8px 32px rgba(33, 150, 243, 0.3);
-  animation: slideIn 0.3s ease-out;
-}
-
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
 }
 
 .callout-content {

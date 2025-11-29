@@ -639,9 +639,6 @@ const onMouseDown = (e: MouseEvent) => {
       radius: simulationStore.creationSettings.radius,
       color: simulationStore.creationSettings.color
     });
-    
-    // Reset isStatic to false after placing a body
-    simulationStore.creationSettings.isStatic = false;
   } else if (e.button === 0) { // Left click to start slingshot
     // Only if not clicking on UI (handled by z-index usually, but good to be safe)
     isDragging = false; // Ensure we aren't panning
@@ -734,8 +731,6 @@ const onMouseMove = (e: MouseEvent) => {
         bodyType: simulationStore.creationSettings.bodyType
       });
       
-      // Reset isStatic to false after placing a body
-      simulationStore.creationSettings.isStatic = false;
       lastSpawnTime = now;
     }
   }
@@ -801,9 +796,6 @@ const onMouseUp = (e: MouseEvent) => {
       color: simulationStore.creationSettings.color,
       bodyType: simulationStore.creationSettings.bodyType
     });
-    
-    // Reset isStatic to false after placing a body
-    simulationStore.creationSettings.isStatic = false;
 
     isSlingshotting.value = false;
     slingshotStartPos = null;

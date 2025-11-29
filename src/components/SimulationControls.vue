@@ -1,7 +1,7 @@
 <template>
   <div>
     <!-- Compact Top Bar Controls -->
-    <div class="top-bar-container" v-show="isVisible">
+    <div class="top-bar-container" :class="{ 'animate-slide': shouldAnimate }" v-show="isVisible">
       <v-card class="pa-2" elevation="4" color="surface">
       <div class="controls-wrapper">
         
@@ -82,7 +82,7 @@
         <div class="controls-section controls-center">
           <!-- Mobile Toggle Button (desktop hidden) -->
           <v-btn
-            @click="isVisible = !isVisible"
+            @click="shouldAnimate = true; isVisible = !isVisible"
             icon="mdi-chevron-up"
             size="small"
             variant="tonal"
@@ -151,19 +151,19 @@
           <div class="d-flex" style="gap: 4px;">
             <div
               class="mass-option-compact"
-              :class="{ 'mass-option-active': selectedMassType === 'asteroid' }"
-              @click="selectMassType('asteroid')"
-              data-body-type="asteroid"
-            >
-              <AsteroidIcon :size="32" />
-            </div>
-            <div
-              class="mass-option-compact"
               :class="{ 'mass-option-active': selectedMassType === 'comet' }"
               @click="selectMassType('comet')"
               data-body-type="comet"
             >
               <CometIcon :size="32" />
+            </div>
+            <div
+              class="mass-option-compact"
+              :class="{ 'mass-option-active': selectedMassType === 'asteroid' }"
+              @click="selectMassType('asteroid')"
+              data-body-type="asteroid"
+            >
+              <AsteroidIcon :size="32" />
             </div>
             <div
               class="mass-option-compact"
@@ -200,9 +200,9 @@
     </div>
     
     <!-- Mobile Toggle Button (show when hidden) -->
-    <div class="mobile-toggle-container" v-show="!isVisible">
+    <div class="mobile-toggle-container" :class="{ 'animate-slide': shouldAnimate }" v-show="!isVisible">
       <v-btn
-        @click="isVisible = !isVisible"
+        @click="shouldAnimate = true; isVisible = !isVisible"
         icon="mdi-chevron-down"
         size="small"
         variant="tonal"
@@ -213,7 +213,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useSimulationStore } from '../stores/simulation';
 
 const isVisible = ref(true);
@@ -326,8 +326,10 @@ const handleKeyDown = (e: KeyboardEvent) => {
   }
 };
 
+// Track if this is initial load (no animations) vs user toggle (with animations)
+const shouldAnimate = ref(false);
+
 // Add keyboard listener on mount
-import { onMounted, onUnmounted } from 'vue';
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown);
 });
@@ -336,8 +338,8 @@ onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown);
 });
 
-// Initialize with sun preset (without resetting isStatic)
-selectMassType('sun');
+// Initialize with asteroid preset
+selectMassType('asteroid');
 </script>
 
 <style scoped>
@@ -519,6 +521,9 @@ selectMassType('sun');
     z-index: 101;
     pointer-events: none;
     padding-left: 8px;
+  }
+  
+  .mobile-toggle-container.animate-slide {
     animation: slideDown 0.3s ease-out;
   }
   
@@ -527,7 +532,7 @@ selectMassType('sun');
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   }
   
-  .top-bar-container {
+  .top-bar-container.animate-slide {
     animation: slideDownPanel 0.3s ease-out;
   }
   

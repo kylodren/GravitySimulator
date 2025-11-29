@@ -17,6 +17,7 @@ import GameCanvas from './components/GameCanvas.vue';
 import SimulationControls from './components/SimulationControls.vue';
 import IntroTour from './components/IntroTour.vue';
 import { useSimulationStore } from './stores/simulation';
+import { Vector2 } from './core/Vector2';
 
 const TOUR_NEVER_SHOW_KEY = 'orbits_tour_never_show';
 
@@ -29,6 +30,20 @@ onMounted(() => {
   if (neverShow) {
     shouldShowTour.value = false;
     simulationStore.completeTour();
+  }
+  
+  // Place initial fixed sun in the center
+  if (simulationStore.bodies.length === 0) {
+    simulationStore.addBody({
+      id: crypto.randomUUID(),
+      position: new Vector2(0, 0),
+      velocity: new Vector2(0, 0),
+      mass: 100,
+      radius: 20,
+      color: '#FFC107',
+      bodyType: 'sun',
+      isStatic: true
+    });
   }
 });
 </script>
