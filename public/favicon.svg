@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Dark space background -->
+  <rect width="64" height="64" fill="#0a0a1a"/>
+  
+  <!-- Rings (behind planet) -->
+  <ellipse cx="32" cy="32" rx="28" ry="10" 
+           fill="none" stroke="#c9a86a" stroke-width="3" opacity="0.4"/>
+  <ellipse cx="32" cy="32" rx="22" ry="8" 
+           fill="none" stroke="#e6d4a8" stroke-width="2.5" opacity="0.5"/>
+  
+  <!-- Planet body -->
+  <circle cx="32" cy="32" r="16" fill="#f4e4c1"/>
+  
+  <!-- Planet bands/stripes -->
+  <ellipse cx="32" cy="28" rx="16" ry="3" fill="#d4b896" opacity="0.6"/>
+  <ellipse cx="32" cy="34" rx="16" ry="2.5" fill="#c9a86a" opacity="0.5"/>
+  <ellipse cx="32" cy="38" rx="15" ry="2" fill="#d4b896" opacity="0.4"/>
+  
+  <!-- Highlight/shine -->
+  <circle cx="26" cy="26" r="5" fill="#ffffff" opacity="0.3"/>
+  
+  <!-- Rings (in front of planet) -->
+  <ellipse cx="32" cy="32" rx="28" ry="10" 
+           fill="none" stroke="#c9a86a" stroke-width="3" opacity="0.6"
+           stroke-dasharray="0 88 44"/>
+  <ellipse cx="32" cy="32" rx="22" ry="8" 
+           fill="none" stroke="#e6d4a8" stroke-width="2.5" opacity="0.7"
+           stroke-dasharray="0 69 35"/>
+</svg>

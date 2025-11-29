@@ -55,6 +55,8 @@ let lastMousePos = new Vector2(0, 0);
 let isRightDragging = false;
 let lastSpawnTime = 0;
 const SPAWN_INTERVAL = 50; // ms between spawns during right-click drag
+let lastPredictionTime = 0;
+const PREDICTION_INTERVAL = 50; // ms between ghost path predictions (throttle)
 
 const resizeCanvas = () => {
   if (container.value && canvas.value) {
@@ -739,27 +741,33 @@ const onMouseMove = (e: MouseEvent) => {
   }
 
   if (isSlingshotting.value && slingshotStartPos) {
-    // Get the actual world position for the slingshot start
-    let actualStartPos = slingshotStartPos;
-    if (slingshotLockedBodyId) {
-      const lockedBody = simulationStore.bodies.find(b => b.id === slingshotLockedBodyId);
-      if (lockedBody) {
-        // slingshotStartPos is stored as offset from locked body
-        actualStartPos = lockedBody.position.add(slingshotStartPos);
+    // Throttle prediction calculations to avoid performance issues
+    const now = performance.now();
+    if (now - lastPredictionTime >= PREDICTION_INTERVAL) {
+      // Get the actual world position for the slingshot start
+      let actualStartPos = slingshotStartPos;
+      if (slingshotLockedBodyId) {
+        const lockedBody = simulationStore.bodies.find(b => b.id === slingshotLockedBodyId);
+        if (lockedBody) {
+          // slingshotStartPos is stored as offset from locked body
+          actualStartPos = lockedBody.position.add(slingshotStartPos);
+        }
       }
-    }
-    
-    const endPos = screenToWorld(currentMousePos);
-    const pullVector = actualStartPos.sub(endPos);
-    const velocity = pullVector.mult(SLINGSHOT_VELOCITY.value);
+      
+      const endPos = screenToWorld(currentMousePos);
+      const pullVector = actualStartPos.sub(endPos);
+      const velocity = pullVector.mult(SLINGSHOT_VELOCITY.value);
 
-    ghostPath.value = simulationStore.predictPath(
-        actualStartPos, 
-        velocity, 
-        simulationStore.creationSettings.mass,
-        30000,
-        0.01  // 10x higher resolution (0.1 / 10)
-    );
+      ghostPath.value = simulationStore.predictPath(
+          actualStartPos, 
+          velocity, 
+          simulationStore.creationSettings.mass,
+          3000,  // Reduced from 30000 for better performance
+          0.016  // Roughly 60fps dt
+      );
+      
+      lastPredictionTime = now;
+    }
   }
 };
 

@@ -278,6 +278,10 @@ const cycleEffects = () => {
 
 const toggleAutoTrails = () => {
   simulationStore.autoTrails = !simulationStore.autoTrails;
+  // When turning off auto trails, set length to 10
+  if (!simulationStore.autoTrails) {
+    simulationStore.trailLength = 10;
+  }
 };
 
 // Keyboard shortcuts
