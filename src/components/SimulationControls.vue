@@ -80,6 +80,15 @@
 
         <!-- Center: Speed and Trail Controls -->
         <div class="controls-section controls-center">
+          <!-- Mobile Toggle Button (desktop hidden) -->
+          <v-btn
+            @click="isVisible = !isVisible"
+            icon="mdi-chevron-up"
+            size="small"
+            variant="tonal"
+            class="mobile-toggle-inline"
+          ></v-btn>
+          
           <!-- Speed Control -->
           <div class="control-group">
             <span class="control-label mb-n3">Speed</span>
@@ -190,11 +199,11 @@
     </v-card>
     </div>
     
-    <!-- Mobile Toggle Button -->
-    <div class="mobile-toggle-container" :class="{ 'controls-hidden': !isVisible }">
+    <!-- Mobile Toggle Button (show when hidden) -->
+    <div class="mobile-toggle-container" v-show="!isVisible">
       <v-btn
         @click="isVisible = !isVisible"
-        :icon="isVisible ? 'mdi-chevron-up' : 'mdi-chevron-down'"
+        icon="mdi-chevron-down"
         size="small"
         variant="tonal"
         class="mobile-toggle-btn"
@@ -361,7 +370,11 @@ selectMassType('sun');
 }
 
 .controls-center {
-  gap: 4px;
+  gap: 8px;
+}
+
+.mobile-toggle-inline {
+  display: none;
 }
 
 .controls-right {
@@ -492,21 +505,21 @@ selectMassType('sun');
 }
 
 @media (max-width: 768px) {
+  .mobile-toggle-inline {
+    display: inline-flex;
+  }
+  
   .mobile-toggle-container {
     display: flex;
     justify-content: flex-start;
     position: fixed;
-    top: 136px;
+    top: 30px;
     left: -2px;
     transform: translateY(-50%);
     z-index: 101;
     pointer-events: none;
     padding-left: 8px;
-    transition: top 0.3s ease;
-  }
-  
-  .mobile-toggle-container.controls-hidden {
-    top: 30px;
+    animation: slideDown 0.3s ease-out;
   }
   
   .mobile-toggle-btn {
@@ -515,7 +528,29 @@ selectMassType('sun');
   }
   
   .top-bar-container {
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    animation: slideDownPanel 0.3s ease-out;
+  }
+  
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(-50%);
+    }
+  }
+  
+  @keyframes slideDownPanel {
+    from {
+      opacity: 0;
+      transform: translateY(-100%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
 </style>
